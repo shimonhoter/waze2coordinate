@@ -33,9 +33,38 @@
                     android:textStyle="bold"
                     android:textColor="#2c3e50"
                     android:gravity="center"
-                    android:layout_marginBottom="20dp" />
+                    android:layout_marginBottom="16dp" />
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/sourceToggle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    app:singleSelection="true"
+                    app:selectionRequired="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSourceWaze"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:text="@string/source_waze"
+                        app:cornerRadius="8dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSourceMaps"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:text="@string/source_maps"
+                        app:cornerRadius="8dp" />
+
+                </com.google.android.material.button.MaterialButtonToggleGroup>
 
                 <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/editUrlLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="@string/hint_url"
@@ -161,6 +190,15 @@
                         android:text="@string/btn_open_maps"
                         app:cornerRadius="8dp"
                         app:backgroundTint="#27ae60" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnNavigateWaze"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/btn_navigate_waze"
+                        app:cornerRadius="8dp"
+                        app:backgroundTint="#33ccff" />
 
                 </LinearLayout>
 

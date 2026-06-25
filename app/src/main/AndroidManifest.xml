@@ -37,6 +37,15 @@
                 <data android:scheme="https" android:host="www.waze.com" android:pathPrefix="/ul" />
             </intent-filter>
 
+            <!-- פתיחה ישירה מקישור Google Maps מקוצר (maps.app.goo.gl, goo.gl/maps) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="maps.app.goo.gl" />
+                <data android:scheme="https" android:host="goo.gl" android:pathPrefix="/maps" />
+            </intent-filter>
+
         </activity>
     </application>
 
