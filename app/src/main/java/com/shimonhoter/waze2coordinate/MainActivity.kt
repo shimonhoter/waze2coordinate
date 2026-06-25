@@ -155,7 +155,21 @@ class MainActivity : AppCompatActivity() {
             return Coordinates(matcher.group(2)!!, matcher.group(3)!!)
         }
 
-        // תבנית 3: to/ll.lat,lon
+        // תבנית 3: to=ll.lat%2Clon (פורמט live-map/directions הנוכחי של Waze)
+        pattern = Pattern.compile("to=ll\\.(-?\\d+\\.\\d+)%2C(-?\\d+\\.\\d+)", Pattern.CASE_INSENSITIVE)
+        matcher = pattern.matcher(text)
+        if (matcher.find()) {
+            return Coordinates(matcher.group(1)!!, matcher.group(2)!!)
+        }
+
+        // תבנית 3ב: to=ll.lat,lon (גרסה לא מקודדת, רק במקרה)
+        pattern = Pattern.compile("to=ll\\.(-?\\d+\\.\\d+),(-?\\d+\\.\\d+)", Pattern.CASE_INSENSITIVE)
+        matcher = pattern.matcher(text)
+        if (matcher.find()) {
+            return Coordinates(matcher.group(1)!!, matcher.group(2)!!)
+        }
+
+        // תבנית 3ג: to/ll.lat,lon (פורמט ישן/חלופי, נשמר לגיבוי)
         pattern = Pattern.compile("to/ll\\.(-?\\d+\\.\\d+),(-?\\d+\\.\\d+)", Pattern.CASE_INSENSITIVE)
         matcher = pattern.matcher(text)
         if (matcher.find()) {
