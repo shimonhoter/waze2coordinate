@@ -8,6 +8,11 @@
     <string name="btn_copy">העתק</string>
     <string name="btn_open_maps">פתח ב-Google Maps</string>
     <string name="btn_navigate_waze">נווט עם Waze</string>
+    <string name="btn_pick_on_map">בחר מיקום על המפה</string>
+    <string name="btn_pick_on_map_close">סגור מפה</string>
+    <string name="map_style_street">רחובות</string>
+    <string name="map_style_satellite">לוויין</string>
+    <string name="map_tap_hint">הקש על המפה לבחירת מיקום</string>
     <string name="label_lat">קו רוחב (Lat)</string>
     <string name="label_lon">קו אורך (Lon)</string>
     <string name="error_empty_url">אנא הכנס קישור תקין</string>

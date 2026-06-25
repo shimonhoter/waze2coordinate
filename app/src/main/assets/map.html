@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        html, body, #map { height: 100%; margin: 0; padding: 0; }
+    </style>
+</head>
+<body>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // נקודת התחלה: ישראל, מרכז הארץ (זום רחוק מספיק לראות את כל המדינה)
+    var DEFAULT_LAT = 31.7683;
+    var DEFAULT_LON = 35.2137;
+    var DEFAULT_ZOOM = 8;
+
+    var map = L.map('map', { zoomControl: true }).setView([DEFAULT_LAT, DEFAULT_LON], DEFAULT_ZOOM);
+
+    // שתי שכבות מפה - רחובות (OpenStreetMap) ולוויין (Esri World Imagery)
+    var streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+    });
+
+    var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri',
+        maxZoom: 19
+    });
+
+    streetLayer.addTo(map);
+    var currentLayer = streetLayer;
+
+    var marker = null;
+
+    function setMarker(lat, lon) {
+        if (marker) {
+            marker.setLatLng([lat, lon]);
+        } else {
+            marker = L.marker([lat, lon]).addTo(map);
+        }
+    }
+
+    // הקשה על המפה - מציבה פין ומדווחת ל-Android (Kotlin) על הקואורדינטות שנבחרו
+    map.on('click', function(e) {
+        var lat = e.latlng.lat.toFixed(6);
+        var lon = e.latlng.lng.toFixed(6);
+        setMarker(lat, lon);
+        if (window.AndroidBridge) {
+            window.AndroidBridge.onMapPointSelected(lat.toString(), lon.toString());
+        }
+    });
+
+    // קריאות שמתבצעות מ-Kotlin אל הדף:
+
+    // החלפת שכבת המפה (רחובות / לוויין)
+    function switchMapStyle(style) {
+        map.removeLayer(currentLayer);
+        currentLayer = (style === 'satellite') ? satelliteLayer : streetLayer;
+        currentLayer.addTo(map);
+    }
+
+    // מירכוז המפה והצבת פין על קואורדינטות נתונות (למשל קואורדינטות שהתקבלו מקישור)
+    function centerOnCoordinates(lat, lon) {
+        var latNum = parseFloat(lat);
+        var lonNum = parseFloat(lon);
+        map.setView([latNum, lonNum], 15);
+        setMarker(latNum, lonNum);
+    }
+</script>
+</body>
+</html>

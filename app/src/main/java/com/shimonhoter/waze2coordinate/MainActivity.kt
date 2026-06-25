@@ -1,10 +1,13 @@
 package com.shimonhoter.waze2coordinate
 
+import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
+import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -34,7 +37,9 @@ class MainActivity : AppCompatActivity() {
         .build()
 
     private var currentSource: Source = Source.WAZE
+    private var isMapVisible = false
 
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -50,12 +55,70 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        setupMapWebView()
+
+        binding.btnPickOnMap.setOnClickListener { toggleMapVisibility() }
+
+        binding.mapStyleToggle.check(binding.btnMapStreet.id)
+        binding.mapStyleToggle.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                val style = if (checkedId == binding.btnMapSatellite.id) "satellite" else "street"
+                binding.mapWebView.evaluateJavascript("switchMapStyle('$style')", null)
+            }
+        }
+
         binding.btnConvert.setOnClickListener { handleConvert() }
         binding.btnCopy.setOnClickListener { copyToClipboard() }
         binding.btnOpenMaps.setOnClickListener { openInGoogleMaps() }
         binding.btnNavigateWaze.setOnClickListener { navigateWithWaze() }
 
         handleIncomingIntent(intent)
+    }
+
+    /**
+     * Bridge בין דף ה-Leaflet שרץ ב-WebView לקוד Kotlin. בכל הקשה על המפה,
+     * הדף קורא ל-onMapPointSelected עם הקואורדינטות הנבחרות.
+     */
+    inner class MapJsBridge {
+        @JavascriptInterface
+        fun onMapPointSelected(lat: String, lon: String) {
+            runOnUiThread {
+                onMapTapped(lat, lon)
+            }
+        }
+    }
+
+    private fun setupMapWebView() {
+        val webView = binding.mapWebView
+        webView.settings.javaScriptEnabled = true
+        webView.settings.domStorageEnabled = true
+        webView.addJavascriptInterface(MapJsBridge(), "AndroidBridge")
+        webView.loadUrl("file:///android_asset/map.html")
+    }
+
+    private fun toggleMapVisibility() {
+        isMapVisible = !isMapVisible
+        binding.mapContainer.visibility = if (isMapVisible) View.VISIBLE else View.GONE
+        binding.btnPickOnMap.text = if (isMapVisible) {
+            getString(R.string.btn_pick_on_map_close)
+        } else {
+            getString(R.string.btn_pick_on_map)
+        }
+    }
+
+    /**
+     * כשבוחרים נקודה במפה - בונים קישור Google Maps תקני (q=lat,lon) ושמים בשדה,
+     * עוברים אוטומטית לטוגל "קישור Google Maps", וממירים את הקישור (שלמעשה כבר
+     * מכיל את הקואורדינטות במלואן, כך שהפענוח מיידי ולא דורש קריאת רשת).
+     */
+    private fun onMapTapped(lat: String, lon: String) {
+        currentSource = Source.MAPS
+        binding.sourceToggle.check(binding.btnSourceMaps.id)
+        updateHintForSource()
+
+        val mapsUrl = "https://www.google.com/maps?q=$lat,$lon"
+        binding.editUrl.setText(mapsUrl)
+        handleConvert()
     }
 
     private fun updateHintForSource() {
@@ -282,6 +345,12 @@ class MainActivity : AppCompatActivity() {
         binding.latValue.text = coords.lat
         binding.lonValue.text = coords.lon
         binding.resultLayout.visibility = android.view.View.VISIBLE
+
+        if (isMapVisible) {
+            binding.mapWebView.evaluateJavascript(
+                "centerOnCoordinates('${coords.lat}', '${coords.lon}')", null
+            )
+        }
     }
 
     private fun copyToClipboard() {
