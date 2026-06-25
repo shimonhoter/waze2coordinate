@@ -1,0 +1,6 @@
+# מונע מ-Git להמיר line-endings בקובץ ה-keystore הבינארי
+# (אם זה לא מוגדר, ה-checkout עלול לפגוע בבייטים של הקובץ ולגרום ל-APK להיראות לא חתום)
+debug.keystore binary
+*.keystore binary
+*.jks binary
+*.apk binary

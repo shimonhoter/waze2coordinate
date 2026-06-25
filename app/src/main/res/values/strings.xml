@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">ממיר Waze לקואורדינטות</string>
+    <string name="hint_url">הדבק כאן קישור Waze</string>
+    <string name="btn_convert">חלץ קואורדינטות</string>
+    <string name="btn_copy">העתק</string>
+    <string name="btn_open_maps">פתח ב-Google Maps</string>
+    <string name="label_lat">קו רוחב (Lat)</string>
+    <string name="label_lon">קו אורך (Lon)</string>
+    <string name="error_empty_url">אנא הכנס קישור Waze תקין</string>
+    <string name="error_no_coords">לא נמצאו קואורדינטות בקישור הזה. ודא שזה קישור Waze למיקום ספציפי.</string>
+    <string name="error_network">שגיאת רשת. ודא שהאינטרנט מחובר ונסה שוב.</string>
+    <string name="loading">מפענח את הקישור...</string>
+    <string name="copied">הועתק ללוח</string>
+</resources>

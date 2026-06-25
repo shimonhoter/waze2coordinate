@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.Waze2Coordinate" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#3498db</item>
+        <item name="colorPrimaryDark">#2980b9</item>
+        <item name="colorAccent">#3498db</item>
+        <item name="android:windowBackground">#f0f4f8</item>
+    </style>
+</resources>

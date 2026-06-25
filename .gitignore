@@ -1,0 +1,17 @@
+*.iml
+.gradle
+/local.properties
+.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuildaud
+.cxx
+*.apk
+*.aab
+
+# חתימה: חוסמים keystores באופן כללי, אבל debug.keystore שלנו הוא קבוע ומכוון
+# ולכן צריך להיות ב-repo בפועל - לכן ה-! מבטל את ההחרגה עבורו בלבד.
+*.keystore
+*.jks
+!debug.keystore
