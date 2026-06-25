@@ -98,7 +98,8 @@ class MainActivity : AppCompatActivity() {
                 if (coords != null) {
                     showResult(coords)
                 } else {
-                    showError(getString(R.string.error_no_coords))
+                    val debugInfo = "URL סופי: $lastFinalUrl\nקוד HTTP: $lastHttpCode\nתחילת תגובה: $lastBodySnippet"
+                    showError(getString(R.string.error_no_coords) + "\n\n" + debugInfo)
                 }
             } catch (e: Exception) {
                 setLoading(false)
@@ -120,16 +121,24 @@ class MainActivity : AppCompatActivity() {
 
         httpClient.newCall(request).execute().use { response ->
             val finalUrl = response.request.url.toString()
+            lastFinalUrl = finalUrl
+            lastHttpCode = response.code
+
             var coords = extractCoordsFromUrl(finalUrl)
             if (coords != null) return coords
 
             // אם הקואורדינטות לא נמצאות ב-URL הסופי (יתכן ש-Waze מטמיע אותן בתוך גוף הדף),
             // נבדוק גם את תוכן התשובה.
             val body = response.body?.string() ?: ""
+            lastBodySnippet = body.take(500)
             coords = extractCoordsFromUrl(body)
             return coords
         }
     }
+
+    private var lastFinalUrl: String = ""
+    private var lastHttpCode: Int = 0
+    private var lastBodySnippet: String = ""
 
     private fun extractCoordsFromUrl(text: String): Coordinates? {
         // תבנית 1: ll=lat,lon או q=lat,lon (פסיק רגיל, לא מקודד)

@@ -81,6 +81,8 @@
                     android:background="#fde8e8"
                     android:textColor="#e74c3c"
                     android:textStyle="bold"
+                    android:textIsSelectable="true"
+                    android:textDirection="ltr"
                     android:visibility="gone" />
 
                 <LinearLayout
