@@ -35,6 +35,15 @@
     var currentLayer = streetLayer;
 
     var marker = null;
+    var gpsMarker = null;
+
+    // אייקון כחול ייעודי לסמן ה-GPS, כדי להבדיל אותו מהפין הרגיל (אדום) של נקודה נבחרת
+    var gpsIcon = L.divIcon({
+        className: 'gps-marker',
+        html: '<div style="width:16px;height:16px;border-radius:50%;background:#4285F4;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+    });
 
     function setMarker(lat, lon) {
         if (marker) {
@@ -69,6 +78,20 @@
         var lonNum = parseFloat(lon);
         map.setView([latNum, lonNum], 15);
         setMarker(latNum, lonNum);
+    }
+
+    // מירכוז המפה למיקום ה-GPS הנוכחי של המכשיר (מתקבל מ-Kotlin אחרי קריאה ל-LocationManager).
+    // לא מציב את הפין "הנבחר" הרגיל - רק נקודה כחולה נפרדת שמסמנת "אני נמצא כאן",
+    // כך שלא נדרס מיקום שכבר נבחר בטעות.
+    function centerOnGps(lat, lon) {
+        var latNum = parseFloat(lat);
+        var lonNum = parseFloat(lon);
+        map.setView([latNum, lonNum], 16);
+        if (gpsMarker) {
+            gpsMarker.setLatLng([latNum, lonNum]);
+        } else {
+            gpsMarker = L.marker([latNum, lonNum], { icon: gpsIcon, interactive: false }).addTo(map);
+        }
     }
 </script>
 </body>

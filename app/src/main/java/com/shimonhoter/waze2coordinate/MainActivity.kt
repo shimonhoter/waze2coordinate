@@ -1,15 +1,21 @@
 package com.shimonhoter.waze2coordinate
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Looper
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.shimonhoter.waze2coordinate.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +45,16 @@ class MainActivity : AppCompatActivity() {
     private var currentSource: Source = Source.WAZE
     private var isMapVisible = false
 
+    private val locationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            centerMapOnGps()
+        } else {
+            Toast.makeText(this, getString(R.string.error_location_permission_denied), Toast.LENGTH_SHORT).show()
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,7 +73,9 @@ class MainActivity : AppCompatActivity() {
 
         setupMapWebView()
 
-        binding.btnPickOnMap.setOnClickListener { toggleMapVisibility() }
+        binding.btnPickOnMap.setOnClickListener { openFullscreenMap() }
+        binding.btnCloseMap.setOnClickListener { closeFullscreenMap() }
+        binding.btnCenterGps.setOnClickListener { requestLocationAndCenter() }
 
         binding.mapStyleToggle.check(binding.btnMapStreet.id)
         binding.mapStyleToggle.addOnButtonCheckedListener { _, checkedId, isChecked ->
@@ -96,20 +114,22 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl("file:///android_asset/map.html")
     }
 
-    private fun toggleMapVisibility() {
-        isMapVisible = !isMapVisible
-        binding.mapContainer.visibility = if (isMapVisible) View.VISIBLE else View.GONE
-        binding.btnPickOnMap.text = if (isMapVisible) {
-            getString(R.string.btn_pick_on_map_close)
-        } else {
-            getString(R.string.btn_pick_on_map)
-        }
+    /** פותח את חלון המפה במסך מלא */
+    private fun openFullscreenMap() {
+        isMapVisible = true
+        binding.mapFullscreenContainer.visibility = View.VISIBLE
+    }
+
+    /** סוגר את חלון המפה ומחזיר למסך הראשי */
+    private fun closeFullscreenMap() {
+        isMapVisible = false
+        binding.mapFullscreenContainer.visibility = View.GONE
     }
 
     /**
-     * כשבוחרים נקודה במפה - בונים קישור Google Maps תקני (q=lat,lon) ושמים בשדה,
-     * עוברים אוטומטית לטוגל "קישור Google Maps", וממירים את הקישור (שלמעשה כבר
-     * מכיל את הקואורדינטות במלואן, כך שהפענוח מיידי ולא דורש קריאת רשת).
+     * כשבוחרים נקודה במפה - בונים קישור Google Maps תקני (q=lat,lon), שמים בשדה,
+     * עוברים אוטומטית לטוגל "קישור Google Maps", ממירים אותו (מיידי, ללא קריאת רשת
+     * כי הקואורדינטות כבר בקישור עצמו), וסוגרים את המפה בחזרה למסך הראשי.
      */
     private fun onMapTapped(lat: String, lon: String) {
         currentSource = Source.MAPS
@@ -119,6 +139,70 @@ class MainActivity : AppCompatActivity() {
         val mapsUrl = "https://www.google.com/maps?q=$lat,$lon"
         binding.editUrl.setText(mapsUrl)
         handleConvert()
+
+        closeFullscreenMap()
+    }
+
+    /** בודק הרשאת מיקום ומבקש אותה אם חסרה; אם יש הרשאה כבר - ממרכז ישירות */
+    private fun requestLocationAndCenter() {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                this, Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) {
+            centerMapOnGps()
+        } else {
+            locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
+    /**
+     * מאתר את המיקום הנוכחי של המכשיר באמצעות LocationManager (GPS + Network providers,
+     * כל מה שזמין) ומרכז את המפה אליו. משתמש ב-getLastKnownLocation לתשובה מיידית,
+     * ובמקביל מבקש עדכון חד-פעמי טרי (single update) כדי לדייק אם יש המתנה.
+     */
+    @SuppressLint("MissingPermission")
+    private fun centerMapOnGps() {
+        val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+
+        val providers = locationManager.getProviders(true)
+        var lastKnown: android.location.Location? = null
+        for (provider in providers) {
+            val loc = locationManager.getLastKnownLocation(provider)
+            if (loc != null && (lastKnown == null || loc.time > lastKnown!!.time)) {
+                lastKnown = loc
+            }
+        }
+
+        if (lastKnown != null) {
+            sendGpsToMap(lastKnown!!.latitude, lastKnown!!.longitude)
+        }
+
+        // בקשת עדכון חד-פעמי טרי, ליתר דיוק (בעיקר רלוונטי אם אין עדיין lastKnownLocation בכלל)
+        val bestProvider = locationManager.getBestProvider(
+            android.location.Criteria().apply { accuracy = android.location.Criteria.ACCURACY_FINE },
+            true
+        )
+        if (bestProvider != null) {
+            try {
+                locationManager.requestSingleUpdate(bestProvider, object : android.location.LocationListener {
+                    override fun onLocationChanged(location: android.location.Location) {
+                        sendGpsToMap(location.latitude, location.longitude)
+                    }
+                }, Looper.getMainLooper())
+            } catch (e: SecurityException) {
+                // הרשאה לא קיימת בפועל (race condition נדיר) - מתעלמים, ה-lastKnown מספיק
+            }
+        } else if (lastKnown == null) {
+            Toast.makeText(this, getString(R.string.error_location_unavailable), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun sendGpsToMap(lat: Double, lon: Double) {
+        binding.mapWebView.evaluateJavascript("centerOnGps('$lat', '$lon')", null)
     }
 
     private fun updateHintForSource() {
@@ -346,11 +430,10 @@ class MainActivity : AppCompatActivity() {
         binding.lonValue.text = coords.lon
         binding.resultLayout.visibility = android.view.View.VISIBLE
 
-        if (isMapVisible) {
-            binding.mapWebView.evaluateJavascript(
-                "centerOnCoordinates('${coords.lat}', '${coords.lon}')", null
-            )
-        }
+        openFullscreenMap()
+        binding.mapWebView.evaluateJavascript(
+            "centerOnCoordinates('${coords.lat}', '${coords.lon}')", null
+        )
     }
 
     private fun copyToClipboard() {
