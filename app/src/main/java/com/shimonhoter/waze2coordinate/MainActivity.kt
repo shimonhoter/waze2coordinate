@@ -204,6 +204,26 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl("file:///android_asset/map.html")
     }
 
+    /** קובץ שמירת הציורים על הדיסק - נשמר ב-filesDir כך שהוא פרטי לאפליקציה ולא נמחק עם cache */
+    private val shapesFile: File
+        get() = File(filesDir, "saved_shapes.json")
+
+    private fun saveShapesToDisk(shapesJson: String) {
+        try {
+            shapesFile.writeText(shapesJson)
+        } catch (e: Exception) {
+            // כשל בשמירה לא אמור לקרוס את האפליקציה - הציור נשאר תקף בזיכרון להמשך הסשן
+        }
+    }
+
+    private fun loadShapesFromDisk(): String? {
+        return try {
+            if (shapesFile.exists()) shapesFile.readText() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /**
      * ידית הגרירה שמתחת לאזור המפה המוטמעת - גרירה אנכית משנה את גובה ה-FrameLayout
      * שעוטף את ה-WebView בזמן אמת. מוגבל לטווח גובה הגיוני (120dp עד 70% מגובה המסך)
