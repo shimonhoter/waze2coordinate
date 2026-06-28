@@ -19,6 +19,7 @@ import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
@@ -71,9 +72,12 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
+        applySavedThemeMode()
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        binding.btnToggleTheme.setOnClickListener { toggleThemeMode() }
 
         binding.sourceToggle.check(binding.btnSourceWaze.id)
         updateHintForSource()
@@ -91,12 +95,35 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnConvert.setOnClickListener { handleConvert() }
         binding.btnCopy.setOnClickListener { copyToClipboard() }
+        binding.coordPill.setOnClickListener { copyToClipboard() }
         binding.btnOpenMaps.setOnClickListener { openInGoogleMaps() }
         binding.btnNavigateWaze.setOnClickListener { navigateWithWaze() }
-        binding.btnSendSms.setOnClickListener { sendViaSms() }
-        binding.btnSendWhatsapp.setOnClickListener { sendViaWhatsapp() }
+        binding.btnSendMessage.setOnClickListener { showSendMessageChooser() }
 
         handleIncomingIntent(intent)
+    }
+
+    /**
+     * טוגל מצב כהה/בהיר ידני (לא תלוי בהגדרת המערכת) - נשמר ב-SharedPreferences
+     * ונטען בכל פתיחה של האפליקציה, לפני super.onCreate() כדי שהתמה תיכנס לתוקף
+     * מיד בלי "קפיצה" חזותית.
+     */
+    private fun applySavedThemeMode() {
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        val isDark = prefs.getBoolean("dark_mode", false)
+        AppCompatDelegate.setDefaultNightMode(
+            if (isDark) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
+        )
+    }
+
+    private fun toggleThemeMode() {
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        val isDark = prefs.getBoolean("dark_mode", false)
+        prefs.edit().putBoolean("dark_mode", !isDark).apply()
+        AppCompatDelegate.setDefaultNightMode(
+            if (!isDark) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
+        )
+        recreate()
     }
 
     /**
@@ -429,7 +456,7 @@ class MainActivity : AppCompatActivity() {
         val url = binding.editUrl.text?.toString()?.trim()
 
         hideError()
-        binding.resultLayout.visibility = android.view.View.GONE
+        binding.resultLayout.visibility = View.GONE
 
         if (url.isNullOrBlank()) {
             showError(getString(R.string.error_empty_url))
@@ -584,9 +611,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun showResult(coords: Coordinates) {
         lastCoords = coords
-        binding.latValue.text = coords.lat
-        binding.lonValue.text = coords.lon
-        binding.resultLayout.visibility = android.view.View.VISIBLE
+        binding.coordCombined.text = "${coords.lat}, ${coords.lon}"
+        binding.resultLayout.visibility = View.VISIBLE
 
         openFullscreenMap()
         binding.mapWebView.evaluateJavascript(
@@ -716,6 +742,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * פותח תפריט בחירה קטן (AlertDialog) בין שליחה ב-SMS לשליחה ב-WhatsApp - כניסה אחת
+     * במקום שני כפתורים נפרדים, כדי לצמצם את העומס הוויזואלי במסך התוצאה.
+     */
+    private fun showSendMessageChooser() {
+        if (lastCoords == null) return
+        val options = arrayOf(getString(R.string.btn_send_sms), getString(R.string.btn_send_whatsapp))
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.send_message_title)
+            .setItems(options) { _, index ->
+                if (index == 0) sendViaSms() else sendViaWhatsapp()
+            }
+            .show()
+    }
+
+    /**
      * שולח SMS עם תוכן ההודעה (תיאור + קואורדינטות + קישורי Maps/Waze).
      * SMS לא תומך בצירוף תמונה באופן סטנדרטי, ולכן רק טקסט נשלח - אך הקישור ל-Google Maps
      * שבתוך הטקסט מציג ויזואלית את אותה נקודה כשהנמען פותח אותו.
@@ -768,17 +809,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setLoading(loading: Boolean) {
-        binding.progressBar.visibility = if (loading) android.view.View.VISIBLE else android.view.View.GONE
+        binding.progressBar.visibility = if (loading) View.VISIBLE else View.GONE
         binding.btnConvert.isEnabled = !loading
     }
 
     private fun showError(msg: String) {
         binding.errorText.text = msg
-        binding.errorText.visibility = android.view.View.VISIBLE
+        binding.errorText.visibility = View.VISIBLE
     }
 
     private fun hideError() {
-        binding.errorText.visibility = android.view.View.GONE
+        binding.errorText.visibility = View.GONE
     }
 
     override fun onDestroy() {

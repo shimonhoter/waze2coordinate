@@ -20,8 +20,10 @@
     <string name="error_no_waze_app">לא נמצאה אפליקציית Waze</string>
     <string name="error_no_maps_app">לא נמצאה אפליקציית מפות</string>
     <string name="hint_description">תיאור הנקודה (אופציונלי)</string>
-    <string name="btn_send_sms">שלח SMS</string>
-    <string name="btn_send_whatsapp">שלח ב-WhatsApp</string>
+    <string name="btn_send_sms">SMS</string>
+    <string name="btn_send_whatsapp">WhatsApp</string>
+    <string name="btn_send_message">שלח הודעה</string>
+    <string name="send_message_title">שלח באמצעות</string>
     <string name="error_no_sms_app">לא נמצאה אפליקציית הודעות</string>
     <string name="error_no_whatsapp_app">לא נמצאה אפליקציית WhatsApp</string>
     <string name="error_snapshot_failed">לא ניתן היה ללכוד תצלום של המפה</string>

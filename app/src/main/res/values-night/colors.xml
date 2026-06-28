@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#2c3e50</color>
+
+    <!-- מערכת צבעים אחידה - מצב כהה -->
+    <color name="app_background">#0F1419</color>
+    <color name="app_surface">#1B2430</color>
+    <color name="app_surface_alt">#242E3C</color>
+    <color name="app_text_primary">#E8EAED</color>
+    <color name="app_text_secondary">#9AA5B1</color>
+    <color name="app_border">#2D3848</color>
+    <color name="app_primary">#3B82F6</color>
+    <color name="app_primary_dark">#60A5FA</color>
+    <color name="app_success">#34D399</color>
+    <color name="app_error">#F87171</color>
+    <color name="app_error_bg">#3A1F1F</color>
+    <color name="app_icon_muted">#5B6470</color>
+</resources>
