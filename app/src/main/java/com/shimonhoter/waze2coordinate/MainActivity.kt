@@ -86,35 +86,6 @@ class MainActivity : AppCompatActivity() {
         setupMapWebView()
 
         binding.btnPickOnMap.setOnClickListener { openFullscreenMap() }
-        binding.btnCloseMap.setOnClickListener { closeFullscreenMap() }
-        binding.btnCenterGps.setOnClickListener { requestLocationAndCenter() }
-        binding.btnToggleGpsFollow.setOnClickListener { toggleGpsFollow() }
-
-        binding.mapModeToggle.check(binding.btnModeSelect.id)
-        binding.mapModeToggle.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (isChecked) {
-                val mode = when (checkedId) {
-                    binding.btnModeDraw.id -> "draw"
-                    binding.btnModeEdit.id -> "edit"
-                    else -> "select"
-                }
-                binding.mapWebView.evaluateJavascript("setMapMode('$mode')", null)
-                updateMapHintForMode(mode)
-            }
-        }
-
-        binding.btnMapStreet.setOnClickListener { switchMapTileStyle("street") }
-        binding.btnMapSatellite.setOnClickListener { switchMapTileStyle("satellite") }
-
-        binding.btnAddressSearch.setOnClickListener { performAddressSearch() }
-        binding.editAddressSearch.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
-                performAddressSearch()
-                true
-            } else {
-                false
-            }
-        }
 
         binding.btnConvert.setOnClickListener { handleConvert() }
         binding.btnCopy.setOnClickListener { copyToClipboard() }
@@ -126,31 +97,10 @@ class MainActivity : AppCompatActivity() {
         handleIncomingIntent(intent)
     }
 
-    private fun switchMapTileStyle(style: String) {
-        binding.mapWebView.evaluateJavascript("switchMapStyle('$style')", null)
-        val selectedColor = android.graphics.Color.parseColor("#3498db")
-        val unselectedColor = android.graphics.Color.parseColor("#cbd5e1")
-        binding.btnMapStreet.setTextColor(if (style == "street") selectedColor else unselectedColor)
-        binding.btnMapSatellite.setTextColor(if (style == "satellite") selectedColor else unselectedColor)
-    }
-
-    private fun updateMapHintForMode(mode: String) {
-        binding.mapHintText.text = when (mode) {
-            "draw" -> getString(R.string.map_tap_hint_draw)
-            "edit" -> getString(R.string.map_tap_hint_edit)
-            else -> getString(R.string.map_tap_hint)
-        }
-    }
-
-    private fun performAddressSearch() {
-        val query = binding.editAddressSearch.text?.toString()?.trim()
-        if (query.isNullOrBlank()) return
-        binding.mapWebView.evaluateJavascript("searchAddress(${JSONObject.quote(query)})", null)
-    }
-
     /**
      * Bridge בין דף ה-Leaflet שרץ ב-WebView לקוד Kotlin. מטפל בהקשות לבחירת נקודה,
-     * שינויים בציורים (לשמירה אוטומטית), ותוצאות חיפוש כתובת.
+     * שינויים בציורים (לשמירה אוטומטית), תוצאות חיפוש כתובת, ובקשות GPS/סגירה
+     * שמגיעות מהכפתורים שכעת מוצגים בתוך ה-HTML עצמו (לא ב-native).
      */
     inner class MapJsBridge {
         @JavascriptInterface
@@ -170,13 +120,30 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun onAddressSearchResult(found: Boolean, lat: String, lon: String, displayName: String) {
             runOnUiThread {
-                if (found) {
-                    binding.editAddressSearch.clearFocus()
-                    val inputManager = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-                    inputManager.hideSoftInputFromWindow(binding.editAddressSearch.windowToken, 0)
-                } else {
+                if (!found) {
                     Toast.makeText(this@MainActivity, getString(R.string.error_address_not_found), Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+
+        @JavascriptInterface
+        fun onRequestGpsCenter() {
+            runOnUiThread {
+                requestLocationAndCenter()
+            }
+        }
+
+        @JavascriptInterface
+        fun onToggleGpsFollow() {
+            runOnUiThread {
+                toggleGpsFollow()
+            }
+        }
+
+        @JavascriptInterface
+        fun onRequestCloseMap() {
+            runOnUiThread {
+                closeFullscreenMap()
             }
         }
     }
@@ -187,10 +154,12 @@ class MainActivity : AppCompatActivity() {
         webView.settings.domStorageEnabled = true
         webView.addJavascriptInterface(MapJsBridge(), "AndroidBridge")
 
-        // טוען את הציורים השמורים מהדיסק לתוך המפה ברגע שהדף סיים להיטען
+        // טוען את הציורים השמורים מהדיסק לתוך המפה ברגע שהדף סיים להיטען,
+        // ומציג את כפתור הסגירה (מוסתר כברירת מחדל ב-HTML, רלוונטי רק בתוך מעטפת native)
         webView.webViewClient = object : android.webkit.WebViewClient() {
             override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                webView.evaluateJavascript("showCloseButton()", null)
                 val savedJson = loadShapesFromDisk()
                 if (savedJson != null) {
                     webView.evaluateJavascript("loadShapesFromJson(${JSONObject.quote(savedJson)})", null)
@@ -373,12 +342,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateGpsFollowButtonState() {
-        val color = if (isGpsFollowActive) {
-            android.graphics.Color.parseColor("#3498db")
-        } else {
-            android.graphics.Color.parseColor("#95a5a6")
-        }
-        binding.btnToggleGpsFollow.imageTintList = android.content.res.ColorStateList.valueOf(color)
+        val activeStr = if (isGpsFollowActive) "true" else "false"
+        binding.mapWebView.evaluateJavascript("setGpsFollowUiState($activeStr)", null)
     }
 
     private fun updateHintForSource() {

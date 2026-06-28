@@ -9,11 +9,6 @@
     <string name="btn_open_maps">פתח ב-Google Maps</string>
     <string name="btn_navigate_waze">נווט עם Waze</string>
     <string name="btn_pick_on_map">בחר מיקום על המפה</string>
-    <string name="map_style_street">רחובות</string>
-    <string name="map_style_satellite">לוויין</string>
-    <string name="map_tap_hint">הקש על המפה לבחירת מיקום</string>
-    <string name="map_tap_hint_draw">הקש על המפה לבחירת כלי ציור</string>
-    <string name="map_tap_hint_edit">הקש על ציור קיים לעריכה או מחיקה</string>
     <string name="error_location_unavailable">לא ניתן לאתר את המיקום הנוכחי. ודא ש-GPS מופעל.</string>
     <string name="error_location_permission_denied">נדרשת הרשאת מיקום כדי למרכז את המפה למיקומך</string>
     <string name="label_lat">קו רוחב (Lat)</string>
@@ -21,7 +16,6 @@
     <string name="error_empty_url">אנא הכנס קישור תקין</string>
     <string name="error_no_coords">לא נמצאו קואורדינטות בקישור הזה. ודא שזה קישור למיקום ספציפי.</string>
     <string name="error_network">שגיאת רשת. ודא שהאינטרנט מחובר ונסה שוב.</string>
-    <string name="loading">מפענח את הקישור...</string>
     <string name="copied">הועתק ללוח</string>
     <string name="error_no_waze_app">לא נמצאה אפליקציית Waze</string>
     <string name="error_no_maps_app">לא נמצאה אפליקציית מפות</string>
@@ -35,12 +29,7 @@
     <string name="msg_coords_label">קואורדינטות</string>
     <string name="msg_maps_label">צפייה במפה</string>
     <string name="msg_waze_label">ניווט עם Waze</string>
-    <string name="mode_select">בחירה</string>
-    <string name="mode_draw">ציור</string>
-    <string name="mode_edit">עריכה/מחיקה</string>
-    <string name="hint_address_search">חפש כתובת...</string>
     <string name="error_address_not_found">לא נמצאה כתובת מתאימה</string>
-    <string name="error_address_search_failed">החיפוש נכשל. ודא שהאינטרנט מחובר ונסה שוב.</string>
     <string name="gps_follow_on">מעקב GPS פעיל</string>
     <string name="gps_follow_off">מעקב GPS כבוי</string>
 </resources>

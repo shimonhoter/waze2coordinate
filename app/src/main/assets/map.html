@@ -4,96 +4,224 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
     <style>
-        html, body, #map { height: 100%; margin: 0; padding: 0; }
+/* [START: MapCSS] */
+        html, body, #map { height: 100%; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
 
-        #stylePanel {
+        /* ===== סרגל כלים ראשי - פינה קבועה, מתחת לכפתורי הזום של Leaflet ===== */
+        .map-toolbar {
             position: absolute;
-            bottom: 70px;
-            left: 10px;
+            top: 60px;
             right: 10px;
-            background: rgba(255,255,255,0.97);
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            padding: 12px;
-            display: none;
             z-index: 1000;
-            font-family: system-ui, sans-serif;
-            direction: rtl;
-        }
-        #stylePanel.visible { display: block; }
-        #stylePanel .row { display: flex; align-items: center; margin-bottom: 8px; }
-        #stylePanel .row label { width: 70px; font-size: 13px; color: #2c3e50; }
-        #stylePanel .row input[type=range] { flex: 1; margin: 0 8px; }
-        #stylePanel .row input[type=color] { width: 36px; height: 28px; border: none; padding: 0; }
-        #stylePanel .row span { width: 32px; font-size: 12px; text-align: center; color: #555; }
-        #stylePanel .actions { display: flex; gap: 8px; margin-top: 4px; }
-        #stylePanel button { flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 13px; font-weight: bold; }
-        #stylePanel .btn-done { background: #3498db; color: white; }
-        #stylePanel .btn-delete { background: #e74c3c; color: white; }
-
-        #drawToolMenu {
-            position: absolute;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
             background: rgba(255,255,255,0.97);
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            display: none;
-            z-index: 1001;
-            overflow: hidden;
-            direction: rtl;
+            padding: 6px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.18);
         }
-        #drawToolMenu.visible { display: block; }
-        #drawToolMenu button {
-            display: block; width: 100%; padding: 10px 16px; border: none; background: white;
-            font-size: 14px; text-align: right; border-bottom: 1px solid #eee;
-        }
-        #drawToolMenu button:last-child { border-bottom: none; }
-        #drawToolMenu button:active { background: #f0f0f0; }
 
-        #finishDrawBtn {
-            position: absolute;
-            bottom: 70px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #27ae60;
-            color: white;
+        .toolbar-item {
+            position: relative; /* מאפשר לתפריט הצץ להתמקם במדויק ביחס לכפתור, בלי לחפוף לאחרים */
+        }
+
+        .toolbar-btn {
+            width: 42px;
+            height: 42px;
             border: none;
-            border-radius: 24px;
-            padding: 12px 28px;
-            font-size: 14px;
-            font-weight: bold;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            display: none;
-            z-index: 1000;
+            border-radius: 8px;
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: #2c3e50;
+            transition: background 0.15s;
         }
-        #finishDrawBtn.visible { display: block; }
+        .toolbar-btn:active { background: #f0f4f8; }
+        .toolbar-btn.active { background: #3498db; color: #ffffff; }
+        .toolbar-btn svg { width: 22px; height: 22px; pointer-events: none; }
 
-        #textInputBox {
+        /* קו מפריד דק בין קבוצות כלים */
+        .toolbar-divider { height: 1px; background: #e2e8f0; margin: 2px 4px; }
+
+        /* ===== טולטיפ - מוצג בריחוף, נפתח שמאלה (לכיוון שאינו חוסם כפתורים אחרים) ===== */
+        .toolbar-tooltip {
+            position: absolute;
+            right: 50px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #2c3e50;
+            color: #ffffff;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s;
+            z-index: 1002;
+            direction: rtl;
+        }
+        .toolbar-item:hover .toolbar-tooltip { opacity: 1; }
+
+        /* ===== תפריט צץ (popup) של כלי - נפתח שמאלה מתחת לכפתור, לא חוסם כלים אחרים ===== */
+        .options-popup {
+            position: absolute;
+            right: 50px;
+            top: 0;
+            display: none;
+            background: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 2px 14px rgba(0,0,0,0.22);
+            padding: 12px;
+            min-width: 200px;
+            z-index: 1001;
+            direction: rtl;
+        }
+        .options-popup.visible { display: block; }
+        .options-popup .popup-title {
+            font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;
+        }
+        .options-popup .option-row {
+            display: flex; align-items: center; margin-bottom: 8px; gap: 8px;
+        }
+        .options-popup .option-row label { font-size: 12px; color: #555; min-width: 56px; }
+        .options-popup .option-row input[type=range] { flex: 1; }
+        .options-popup .option-row input[type=color] { width: 32px; height: 26px; border: none; padding: 0; border-radius: 4px; }
+        .options-popup .option-row span.val { font-size: 11px; color: #888; min-width: 28px; text-align: left; }
+        .options-popup .icon-choices { display: flex; gap: 6px; flex-wrap: wrap; }
+        .options-popup .icon-choice {
+            width: 30px; height: 30px; border-radius: 6px; border: 2px solid transparent;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; background: #f0f4f8;
+        }
+        .options-popup .icon-choice.selected { border-color: #3498db; }
+        .options-popup .popup-actions { display: flex; gap: 6px; margin-top: 8px; }
+        .options-popup .popup-actions button {
+            flex: 1; padding: 7px; border: none; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer;
+        }
+        .options-popup .btn-done { background: #3498db; color: white; }
+        .options-popup .btn-delete { background: #e74c3c; color: white; }
+
+        /* ===== חלונית מדידה (מרחק/שטח) בזמן ציור - לא חוסמת את הסרגל ===== */
+        .measure-readout {
             position: absolute;
             top: 60px;
             left: 10px;
-            right: 10px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            padding: 10px;
+            z-index: 1000;
+            background: rgba(44,62,80,0.92);
+            color: #ffffff;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: bold;
             display: none;
-            z-index: 1001;
             direction: rtl;
         }
-        #textInputBox.visible { display: block; }
-        #textInputBox input {
-            width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 6px;
-            font-size: 14px; margin-bottom: 8px;
+        .measure-readout.visible { display: block; }
+
+        /* ===== תיבת חיפוש כתובת - שורה עליונה, לא מתנגשת עם הסרגל הצדדי ===== */
+        .address-search-bar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 60px;
+            z-index: 1000;
+            display: flex;
+            gap: 6px;
         }
-        #textInputBox button {
-            width: 100%; padding: 8px; background: #3498db; color: white; border: none;
-            border-radius: 6px; font-weight: bold;
+        .address-search-bar input {
+            flex: 1;
+            height: 42px;
+            border: none;
+            border-radius: 10px;
+            padding: 0 12px;
+            font-size: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            direction: rtl;
+        }
+        .address-search-bar button {
+            width: 42px;
+            height: 42px;
+            border: none;
+            border-radius: 10px;
+            background: #ffffff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .address-search-bar button svg { width: 20px; height: 20px; color: #2c3e50; }
+
+        /* ===== כפתורי GPS - פינה תחתונה-שמאלית (לא מתנגש עם הסרגל הימני) ===== */
+        .gps-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .gps-btn {
+            width: 44px;
+            height: 44px;
+            border: none;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .gps-btn svg { width: 22px; height: 22px; }
+        .gps-btn.gps-follow-on svg { color: #3498db; }
+        .gps-btn.gps-follow-off svg { color: #95a5a6; }
+        .gps-btn.gps-center svg { color: #3498db; }
+
+        /* ===== כפתור סגירת מפה - פינה שמאלית-עליונה ===== */
+        .map-close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            width: 42px;
+            height: 42px;
+            border: none;
+            border-radius: 10px;
+            background: #ffffff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            display: none; /* מוצג רק כשהמפה משובצת באפליקציה native, נשלט מ-Kotlin */
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .map-close-btn svg { width: 20px; height: 20px; color: #2c3e50; }
+        .map-close-btn.visible { display: flex; }
+
+        /* ===== טקסט עזרה תחתון ===== */
+        .map-hint-text {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 999;
+            background: rgba(0,0,0,0.75);
+            color: #ffffff;
+            text-align: center;
+            padding: 8px;
+            font-size: 12px;
+            direction: rtl;
         }
 
         .pin-label {
             position: absolute;
-            top: 22px;
+            top: 100%;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(255,255,255,0.95);
@@ -103,451 +231,625 @@
             white-space: nowrap;
             box-shadow: 0 1px 3px rgba(0,0,0,0.3);
             direction: rtl;
+            margin-top: 2px;
         }
+
+        /* תיקון z-index של בקרות Leaflet המובנות, כדי שלא יתחרו עם הסרגל שלנו */
+        .leaflet-top.leaflet-left { top: 10px; }
+        .leaflet-control-attribution { font-size: 9px; }
+/* [END: MapCSS] */
     </style>
 </head>
 <body>
+<!-- [START: MapHTML] -->
 <div id="map"></div>
 
-<div id="drawToolMenu">
-    <button onclick="selectDrawTool('pin')">📍 פין + טקסט</button>
-    <button onclick="selectDrawTool('line')">📏 קו</button>
-    <button onclick="selectDrawTool('polygon')">⬠ פוליגון</button>
-    <button onclick="selectDrawTool('circle')">⭕ עיגול</button>
+<button id="mapCloseBtn" class="map-close-btn" title="סגור מפה">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19,6.41L17.59,5 12,10.59 6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 12,13.41 17.59,19 19,17.59 13.41,12z"/></svg>
+</button>
+
+<div class="address-search-bar">
+    <input type="text" id="addressInput" placeholder="חפש כתובת..." />
+    <button id="addressSearchBtn" title="חפש">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5,14h-0.79l-0.28,-0.27C15.41,12.59 16,11.11 16,9.5 16,5.91 13.09,3 9.5,3S3,5.91 3,9.5 5.91,16 9.5,16c1.61,0 3.09,-0.59 4.23,-1.57l0.27,0.28v0.79l5,4.99L20.49,19l-4.99,-5zM9.5,14C7.01,14 5,11.99 5,9.5S7.01,5 9.5,5 14,7.01 14,9.5 11.99,14 9.5,14z"/></svg>
+    </button>
 </div>
 
-<div id="textInputBox">
-    <input type="text" id="textInputField" placeholder="טקסט לתווית..." />
-    <button onclick="confirmTextInput()">אישור</button>
+<!-- סרגל הכלים הראשי - אייקונים בלבד, טולטיפ בריחוף, תפריטים צצים שמאלה -->
+<div class="map-toolbar" id="mainToolbar">
+
+    <div class="toolbar-item">
+        <button class="toolbar-btn" id="btnModeSelect" data-mode="select">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9,2 L9,16 L12.5,12.5 L15,19 L17,18 L14.5,11.5 L19,11.5 Z"/></svg>
+        </button>
+        <div class="toolbar-tooltip">מצב בחירה - הקש לקבלת קואורדינטות</div>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-item">
+        <button class="toolbar-btn" id="btnAddMarker">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,2C8.13,2 5,5.13 5,9c0,5.25 7,13 7,13s7,-7.75 7,-13C19,5.13 15.87,2 12,2zM12,11.5c-1.38,0 -2.5,-1.12 -2.5,-2.5s1.12,-2.5 2.5,-2.5 2.5,1.12 2.5,2.5S13.38,11.5 12,11.5z"/></svg>
+        </button>
+        <div class="toolbar-tooltip">הוסף סימון (פין + טקסט)</div>
+        <div class="options-popup" id="markerOptionsPopup">
+            <div class="popup-title">הגדרות סימון</div>
+            <div class="option-row">
+                <label>גודל</label>
+                <input type="range" id="markerSizeSlider" min="16" max="48" value="26" />
+                <span class="val" id="markerSizeVal">26</span>
+            </div>
+            <div class="option-row">
+                <label>צבע</label>
+                <input type="color" id="markerColorPicker" value="#e74c3c" />
+            </div>
+            <div class="option-row" style="align-items:flex-start;">
+                <label>אייקון</label>
+                <div class="icon-choices" id="markerIconChoices"></div>
+            </div>
+            <div class="popup-actions">
+                <button class="btn-done" id="btnStartMarkerPlacement">הצב על המפה</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toolbar-item">
+        <button class="toolbar-btn" id="btnDrawLine">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4,18 L10,8 L14,14 L20,5"/></svg>
+        </button>
+        <div class="toolbar-tooltip">צייר קו ומדוד מרחק</div>
+    </div>
+
+    <div class="toolbar-item">
+        <button class="toolbar-btn" id="btnDrawPolygon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12,3 L20,9 L17,19 L7,19 L4,9 Z"/></svg>
+        </button>
+        <div class="toolbar-tooltip">צייר פוליגון ומדוד שטח</div>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-item">
+        <button class="toolbar-btn" id="btnEditShapes">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,17.25V21h3.75L17.81,9.94l-3.75,-3.75L3,17.25zM20.71,7.04c0.39,-0.39 0.39,-1.02 0,-1.41l-2.34,-2.34c-0.39,-0.39 -1.02,-0.39 -1.41,0l-1.83,1.83 3.75,3.75 1.83,-1.83z"/></svg>
+        </button>
+        <div class="toolbar-tooltip">ערוך או מחק ציורים קיימים</div>
+    </div>
+
+    <div class="toolbar-item">
+        <button class="toolbar-btn" id="btnMapStyle">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5,3l-0.16,0.03L15,5.1L9,3L3.36,4.9C3.15,4.97 3,5.15 3,5.38v15.3c0,0.41 0.41,0.7 0.79,0.55L9,19.1l6,2.1l5.64,-1.9c0.21,-0.07 0.36,-0.25 0.36,-0.48V3.55C21,3.14 20.83,3 20.5,3zM10,5.47l4,1.4v11.66l-4,-1.4L10,5.47zM5,5.92l3,-1.01v11.74l-3,1.16L5,5.92zM19,18.08l-3,1.01L16,7.35l3,-1.16L19,18.08z"/></svg>
+        </button>
+        <div class="toolbar-tooltip">החלף סגנון מפה (רחובות/לוויין)</div>
+        <div class="options-popup" id="mapStylePopup">
+            <div class="popup-title">סגנון מפה</div>
+            <div class="popup-actions">
+                <button class="btn-done" id="btnStyleStreet">רחובות</button>
+                <button class="btn-done" id="btnStyleSatellite" style="background:#7f8c8d;">לוויין</button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
-<button id="finishDrawBtn" onclick="finishCurrentDrawing()">סיום ציור</button>
+<div class="measure-readout" id="measureReadout"></div>
 
-<div id="stylePanel">
-    <div class="row">
-        <label>צבע</label>
-        <input type="color" id="styleColor" value="#e74c3c" oninput="onStyleChange()" />
-    </div>
-    <div class="row">
-        <label>שקיפות</label>
-        <input type="range" id="styleOpacity" min="0" max="100" value="80" oninput="onStyleChange()" />
-        <span id="styleOpacityVal">80%</span>
-    </div>
-    <div class="row">
-        <label>עובי קו</label>
-        <input type="range" id="styleWeight" min="1" max="12" value="3" oninput="onStyleChange()" />
-        <span id="styleWeightVal">3</span>
-    </div>
-    <div class="actions">
-        <button class="btn-delete" onclick="deleteSelectedShape()">מחק</button>
-        <button class="btn-done" onclick="closeStylePanel()">סגור</button>
-    </div>
+<div class="gps-controls">
+    <button class="gps-btn gps-follow-off" id="btnGpsFollow" title="מעקב GPS רציף">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,8c-2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4 -1.79,-4 -4,-4zM3.05,13L1,13v-2h2.05C3.5,6.83 6.83,3.5 11,3.05L11,1h2v2.05c4.17,0.45 7.5,3.78 7.95,7.95L23,11v2h-2.05c-0.45,4.17 -3.78,7.5 -7.95,7.95L13,23h-2v-2.05C6.83,20.5 3.5,17.17 3.05,13zM12,5c-3.87,0 -7,3.13 -7,7s3.13,7 7,7 7,-3.13 7,-7 -3.13,-7 -7,-7z"/></svg>
+    </button>
+    <button class="gps-btn gps-center" id="btnGpsCenter" title="מרכז למיקומי">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,8c-2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4 -1.79,-4 -4,-4zM20.94,11c-0.46,-4.17 -3.77,-7.48 -7.94,-7.94L13,1h-2v2.06C6.83,3.52 3.52,6.83 3.06,11L1,11v2h2.06c0.46,4.17 3.77,7.48 7.94,7.94L11,23h2v-2.06c4.17,-0.46 7.48,-3.77 7.94,-7.94L23,13v-2h-2.06zM12,19c-3.87,0 -7,-3.13 -7,-7s3.13,-7 7,-7 7,3.13 7,7 -3.13,7 -7,7z"/></svg>
+    </button>
 </div>
+
+<div class="map-hint-text" id="mapHintText">הקש על המפה לבחירת מיקום</div>
+<!-- [END: MapHTML] -->
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script>
-    var DEFAULT_LAT = 31.7683;
-    var DEFAULT_LON = 35.2137;
-    var DEFAULT_ZOOM = 8;
+// [START: MapLogic]
 
-    var map = L.map('map', { zoomControl: true }).setView([DEFAULT_LAT, DEFAULT_LON], DEFAULT_ZOOM);
+// ===== אתחול בסיסי של המפה =====
+var DEFAULT_LAT = 31.7683;
+var DEFAULT_LON = 35.2137;
+var DEFAULT_ZOOM = 8;
 
-    var streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 19
-    });
-    var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles &copy; Esri',
-        maxZoom: 19
-    });
-    streetLayer.addTo(map);
-    var currentLayer = streetLayer;
+var map = L.map('map', { zoomControl: true }).setView([DEFAULT_LAT, DEFAULT_LON], DEFAULT_ZOOM);
 
-    var marker = null;
-    var gpsMarker = null;
-    var gpsIcon = L.divIcon({
-        className: 'gps-marker',
-        html: '<div style="width:16px;height:16px;border-radius:50%;background:#4285F4;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
-        iconSize: [16, 16],
-        iconAnchor: [8, 8]
-    });
+var streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+});
+var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 19
+});
+streetLayer.addTo(map);
+var currentTileLayer = streetLayer;
 
-    function setMarker(lat, lon) {
-        if (marker) {
-            marker.setLatLng([lat, lon]);
-        } else {
-            marker = L.marker([lat, lon]).addTo(map);
+function switchMapStyle(style) {
+    map.removeLayer(currentTileLayer);
+    currentTileLayer = (style === 'satellite') ? satelliteLayer : streetLayer;
+    currentTileLayer.addTo(map);
+    closeAllPopups();
+}
+
+// ===== סימון בחירה (select mode) ועדכון Kotlin =====
+var selectMarker = null;
+
+function setMarker(lat, lon) {
+    if (selectMarker) {
+        selectMarker.setLatLng([lat, lon]);
+    } else {
+        selectMarker = L.marker([lat, lon]).addTo(map);
+    }
+}
+
+function centerOnCoordinates(lat, lon) {
+    var latNum = parseFloat(lat);
+    var lonNum = parseFloat(lon);
+    map.setView([latNum, lonNum], 15);
+    setMarker(latNum, lonNum);
+}
+
+// ===== GPS - מירכוז חד-פעמי ומעקב רציף =====
+var gpsMarker = null;
+var gpsIcon = L.divIcon({
+    className: 'gps-marker-icon',
+    html: '<div style="width:16px;height:16px;border-radius:50%;background:#4285F4;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8]
+});
+
+function centerOnGps(lat, lon) {
+    var latNum = parseFloat(lat);
+    var lonNum = parseFloat(lon);
+    map.setView([latNum, lonNum], 16);
+    if (gpsMarker) {
+        gpsMarker.setLatLng([latNum, lonNum]);
+    } else {
+        gpsMarker = L.marker([latNum, lonNum], { icon: gpsIcon, interactive: false }).addTo(map);
+    }
+}
+
+// ===== מצבי מפה: select / draw-marker / edit =====
+// (ציור קו/פוליגון מופעל ישירות דרך Leaflet.Draw handlers ולא דרך מצב מתמשך)
+var currentMode = 'select';
+
+function setUiMode(mode) {
+    currentMode = mode;
+    document.querySelectorAll('.toolbar-btn').forEach(function(btn) { btn.classList.remove('active'); });
+    if (mode === 'select') {
+        document.getElementById('btnModeSelect').classList.add('active');
+        document.getElementById('mapHintText').textContent = 'הקש על המפה לבחירת מיקום';
+    } else if (mode === 'edit') {
+        document.getElementById('btnEditShapes').classList.add('active');
+        document.getElementById('mapHintText').textContent = 'הקש על ציור קיים לעריכה או מחיקה';
+    } else if (mode === 'place-marker') {
+        document.getElementById('mapHintText').textContent = 'הקש על המפה למיקום הסימון';
+    }
+}
+
+document.getElementById('btnModeSelect').addEventListener('click', function() {
+    closeAllPopups();
+    setUiMode('select');
+});
+
+document.getElementById('btnEditShapes').addEventListener('click', function() {
+    closeAllPopups();
+    setUiMode('edit');
+});
+
+map.on('click', function(e) {
+    if (currentMode === 'select') {
+        var lat = e.latlng.lat.toFixed(6);
+        var lon = e.latlng.lng.toFixed(6);
+        setMarker(lat, lon);
+        if (window.AndroidBridge) {
+            window.AndroidBridge.onMapPointSelected(lat.toString(), lon.toString());
         }
+    } else if (currentMode === 'place-marker') {
+        placeMarkerAt(e.latlng);
+        setUiMode('select');
     }
+});
 
-    function switchMapStyle(style) {
-        map.removeLayer(currentLayer);
-        currentLayer = (style === 'satellite') ? satelliteLayer : streetLayer;
-        currentLayer.addTo(map);
-    }
+// ===== ניהול תפריטים צצים (popups) - רק אחד פתוח בכל זמן, לא חופפים =====
+function closeAllPopups() {
+    document.querySelectorAll('.options-popup').forEach(function(p) { p.classList.remove('visible'); });
+}
 
-    function centerOnCoordinates(lat, lon) {
-        var latNum = parseFloat(lat);
-        var lonNum = parseFloat(lon);
-        map.setView([latNum, lonNum], 15);
-        setMarker(latNum, lonNum);
-    }
+function togglePopup(id) {
+    var popup = document.getElementById(id);
+    var wasVisible = popup.classList.contains('visible');
+    closeAllPopups();
+    if (!wasVisible) popup.classList.add('visible');
+}
 
-    function centerOnGps(lat, lon) {
-        var latNum = parseFloat(lat);
-        var lonNum = parseFloat(lon);
-        map.setView([latNum, lonNum], 16);
-        if (gpsMarker) {
-            gpsMarker.setLatLng([latNum, lonNum]);
-        } else {
-            gpsMarker = L.marker([latNum, lonNum], { icon: gpsIcon, interactive: false }).addTo(map);
+document.getElementById('btnAddMarker').addEventListener('click', function() {
+    togglePopup('markerOptionsPopup');
+});
+
+document.getElementById('btnMapStyle').addEventListener('click', function() {
+    togglePopup('mapStylePopup');
+});
+
+document.getElementById('btnStyleStreet').addEventListener('click', function() {
+    switchMapStyle('street');
+});
+document.getElementById('btnStyleSatellite').addEventListener('click', function() {
+    switchMapStyle('satellite');
+});
+
+// סוגרים תפריטים צצים בהקשה על המפה עצמה (לא על הסרגל)
+map.on('click', function() { closeAllPopups(); });
+
+// ===== הגדרות סימון (marker): גודל, צבע, סוג אייקון =====
+var markerSettings = { size: 26, color: '#e74c3c', iconKey: 'pin' };
+
+var MARKER_ICON_SVGS = {
+    pin: '<path d="M12,2C8.13,2 5,5.13 5,9c0,5.25 7,13 7,13s7,-7.75 7,-13C19,5.13 15.87,2 12,2zM12,11.5c-1.38,0 -2.5,-1.12 -2.5,-2.5s1.12,-2.5 2.5,-2.5 2.5,1.12 2.5,2.5S13.38,11.5 12,11.5z"/>',
+    star: '<path d="M12,17.27L18.18,21l-1.64,-7.03L22,9.24l-7.19,-0.61L12,2 9.19,8.63 2,9.24l5.46,4.73L5.82,21z"/>',
+    flag: '<path d="M14.4,6L14,4H5v17h2v-7h5.6l0.4,2h7V6z"/>',
+    circle: '<circle cx="12" cy="12" r="8"/>',
+    warn: '<path d="M1,21h22L12,2 1,21zM13,18h-2v-2h2v2zM13,14h-2v-4h2v4z"/>'
+};
+
+function buildIconChoiceButtons() {
+    var container = document.getElementById('markerIconChoices');
+    container.innerHTML = '';
+    Object.keys(MARKER_ICON_SVGS).forEach(function(key) {
+        var btn = document.createElement('div');
+        btn.className = 'icon-choice' + (key === markerSettings.iconKey ? ' selected' : '');
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="' + markerSettings.color + '">' + MARKER_ICON_SVGS[key] + '</svg>';
+        btn.addEventListener('click', function() {
+            markerSettings.iconKey = key;
+            document.querySelectorAll('#markerIconChoices .icon-choice').forEach(function(c) { c.classList.remove('selected'); });
+            btn.classList.add('selected');
+        });
+        container.appendChild(btn);
+    });
+}
+buildIconChoiceButtons();
+
+document.getElementById('markerSizeSlider').addEventListener('input', function(e) {
+    markerSettings.size = parseInt(e.target.value);
+    document.getElementById('markerSizeVal').textContent = markerSettings.size;
+});
+
+document.getElementById('markerColorPicker').addEventListener('input', function(e) {
+    markerSettings.color = e.target.value;
+    buildIconChoiceButtons();
+});
+
+document.getElementById('btnStartMarkerPlacement').addEventListener('click', function() {
+    closeAllPopups();
+    setUiMode('place-marker');
+});
+
+function makeMarkerDivIcon(size, color, iconKey, text) {
+    var svgPath = MARKER_ICON_SVGS[iconKey] || MARKER_ICON_SVGS.pin;
+    var label = text ? '<div class="pin-label">' + escapeHtml(text) + '</div>' : '';
+    return L.divIcon({
+        className: 'custom-marker-icon',
+        html: '<svg viewBox="0 0 24 24" width="' + size + '" height="' + size + '" fill="' + color +
+              '" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));">' + svgPath + '</svg>' + label,
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2]
+    });
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.innerText = text;
+    return div.innerHTML;
+}
+
+// ===== שכבת הציורים (markers + leaflet-draw shapes) =====
+var drawnItems = new L.FeatureGroup().addTo(map);
+var shapeMeta = {}; // leaflet internal layer id -> { kind: 'marker'|'line'|'polygon', style/settings, text }
+
+function placeMarkerAt(latlng) {
+    var text = window.prompt('טקסט לתווית (ניתן להשאיר ריק):', '') || '';
+    var icon = makeMarkerDivIcon(markerSettings.size, markerSettings.color, markerSettings.iconKey, text);
+    var layer = L.marker(latlng, { icon: icon });
+    layer.feature = { properties: {
+        kind: 'marker', size: markerSettings.size, color: markerSettings.color,
+        iconKey: markerSettings.iconKey, text: text
+    }};
+    drawnItems.addLayer(layer);
+    attachEditHandler(layer);
+    persistShapes();
+}
+
+function attachEditHandler(layer) {
+    layer.on('click', function(e) {
+        if (currentMode === 'edit') {
+            L.DomEvent.stopPropagation(e);
+            openEditPopupFor(layer, e);
         }
-    }
+    });
+}
 
-    var mapMode = 'select';
+// ===== Leaflet.Draw - קו ופוליגון, עם מדידה בזמן אמת =====
+var drawLineHandler = new L.Draw.Polyline(map, {
+    shapeOptions: { color: '#3498db', weight: 4 }
+});
+var drawPolygonHandler = new L.Draw.Polygon(map, {
+    shapeOptions: { color: '#27ae60', weight: 3, fillOpacity: 0.35 }
+});
 
-    function setMapMode(mode) {
-        mapMode = mode;
-        cancelCurrentDrawing();
-        closeStylePanel();
-        hideDrawToolMenu();
-    }
+document.getElementById('btnDrawLine').addEventListener('click', function() {
+    closeAllPopups();
+    drawPolygonHandler.disable();
+    drawLineHandler.enable();
+});
 
-    var drawnItems = L.layerGroup().addTo(map);
-    var shapesById = {};
-    var nextShapeId = 1;
+document.getElementById('btnDrawPolygon').addEventListener('click', function() {
+    closeAllPopups();
+    drawLineHandler.disable();
+    drawPolygonHandler.enable();
+});
 
-    function defaultStyle() {
-        return {
-            color: document.getElementById('styleColor').value,
-            opacity: parseInt(document.getElementById('styleOpacity').value) / 100,
-            weight: parseInt(document.getElementById('styleWeight').value)
-        };
-    }
+map.on(L.Draw.Event.DRAWSTART, function() {
+    document.getElementById('measureReadout').classList.add('visible');
+});
 
-    function applyStyleToLayer(layer, type, style) {
-        if (type === 'pin') {
-            if (layer.getElement) {
-                var el = layer.getElement();
-                if (el) {
-                    var inner = el.querySelector('.pin-dot');
-                    if (inner) inner.style.background = style.color;
-                }
-            }
-        } else {
-            layer.setStyle({
-                color: style.color,
-                fillColor: style.color,
-                opacity: style.opacity,
-                fillOpacity: style.opacity * 0.5,
-                weight: style.weight
-            });
+// מדידה בזמן אמת בזמן ציור (Leaflet.Draw מפעיל את זה דרך editable handlers שמדווחים vertices)
+map.on(L.Draw.Event.DRAWVERTEX, function(e) {
+    updateLiveMeasure();
+});
+
+function updateLiveMeasure() {
+    var readout = document.getElementById('measureReadout');
+    if (drawLineHandler._enabled && drawLineHandler._markers && drawLineHandler._markers.length >= 2) {
+        var latlngs = drawLineHandler._markers.map(function(m) { return m.getLatLng(); });
+        var dist = 0;
+        for (var i = 1; i < latlngs.length; i++) {
+            dist += latlngs[i - 1].distanceTo(latlngs[i]);
         }
+        readout.textContent = 'מרחק: ' + formatDistance(dist);
+        readout.classList.add('visible');
+    } else if (drawPolygonHandler._enabled && drawPolygonHandler._markers && drawPolygonHandler._markers.length >= 3) {
+        var pts = drawPolygonHandler._markers.map(function(m) { return m.getLatLng(); });
+        var area = polygonAreaApprox(pts);
+        readout.textContent = 'שטח: ' + formatArea(area);
+        readout.classList.add('visible');
+    }
+}
+
+function polygonAreaApprox(latlngs) {
+    // נוסחת שטח גיאודטית פשוטה (Shoelace על השלכת מרקטור), מספיק מדויקת לתצוגה בזמן ציור
+    var area = 0;
+    var R = 6378137;
+    for (var i = 0; i < latlngs.length; i++) {
+        var p1 = latlngs[i];
+        var p2 = latlngs[(i + 1) % latlngs.length];
+        area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
+    }
+    return Math.abs(area * R * R / 2);
+}
+function toRad(deg) { return deg * Math.PI / 180; }
+
+function formatDistance(meters) {
+    if (meters >= 1000) return (meters / 1000).toFixed(2) + ' ק"מ';
+    return Math.round(meters) + ' מ\'';
+}
+function formatArea(sqMeters) {
+    if (sqMeters >= 1000000) return (sqMeters / 1000000).toFixed(3) + ' קמ"ר';
+    if (sqMeters >= 10000) return (sqMeters / 10000).toFixed(2) + ' דונם';
+    return Math.round(sqMeters) + ' מ"ר';
+}
+
+map.on(L.Draw.Event.CREATED, function(e) {
+    var layer = e.layer;
+    var kind = (e.layerType === 'polyline') ? 'line' : 'polygon';
+    var style = (kind === 'line')
+        ? { color: '#3498db', opacity: 1, weight: 4 }
+        : { color: '#27ae60', opacity: 1, weight: 3, fillOpacity: 0.35 };
+
+    layer.feature = { properties: { kind: kind, style: style } };
+    drawnItems.addLayer(layer);
+    attachEditHandler(layer);
+
+    document.getElementById('measureReadout').classList.remove('visible');
+    persistShapes();
+});
+
+// ===== עריכה/מחיקה של ציור קיים (פאנל סטייל ליד האלמנט) =====
+var activeEditLayer = null;
+
+function openEditPopupFor(layer, mapEvent) {
+    activeEditLayer = layer;
+    var props = (layer.feature && layer.feature.properties) || {};
+    var popup = document.getElementById('editShapePopup');
+    if (!popup) {
+        popup = buildEditPopupElement();
     }
 
-    function makePinIcon(text, color) {
-        var label = text ? '<div class="pin-label">' + escapeHtml(text) + '</div>' : '';
-        return L.divIcon({
-            className: 'custom-pin',
-            html: '<div class="pin-dot" style="width:20px;height:20px;border-radius:50%;background:' + color +
-                  ';border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>' + label,
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
+    // ממקמים את הפופאפ ליד הציור, אך בתוך גבולות המפה - לא חוסם את הסרגל הימני
+    var point = mapEvent.containerPoint || map.latLngToContainerPoint(layer.getLatLng ? layer.getLatLng() : layer.getBounds().getCenter());
+    var popupWidth = 220;
+    var left = Math.min(Math.max(point.x - popupWidth / 2, 10), map.getSize().x - popupWidth - 10);
+    var top = Math.min(point.y + 20, map.getSize().y - 200);
+    popup.style.left = left + 'px';
+    popup.style.top = top + 'px';
+
+    var isMarker = props.kind === 'marker';
+    document.getElementById('editColorPicker').value = isMarker ? (props.color || '#e74c3c') : (props.style.color || '#3498db');
+    document.getElementById('editOpacitySlider').value = isMarker ? 100 : Math.round((props.style.opacity || 1) * 100);
+    document.getElementById('editWeightSlider').value = isMarker ? (props.size || 26) : (props.style.weight || 3);
+    document.getElementById('editWeightLabel').textContent = isMarker ? 'גודל' : 'עובי קו';
+    document.getElementById('editOpacityVal').textContent = document.getElementById('editOpacitySlider').value + '%';
+    document.getElementById('editWeightVal').textContent = document.getElementById('editWeightSlider').value;
+
+    popup.classList.add('visible');
+}
+
+function buildEditPopupElement() {
+    var popup = document.createElement('div');
+    popup.id = 'editShapePopup';
+    popup.className = 'options-popup';
+    popup.style.right = 'auto';
+    popup.innerHTML =
+        '<div class="popup-title">עריכת ציור</div>' +
+        '<div class="option-row"><label>צבע</label><input type="color" id="editColorPicker"/></div>' +
+        '<div class="option-row"><label>שקיפות</label><input type="range" id="editOpacitySlider" min="10" max="100"/><span class="val" id="editOpacityVal"></span></div>' +
+        '<div class="option-row"><label id="editWeightLabel">עובי</label><input type="range" id="editWeightSlider" min="1" max="48"/><span class="val" id="editWeightVal"></span></div>' +
+        '<div class="popup-actions"><button class="btn-delete" id="editDeleteBtn">מחק</button><button class="btn-done" id="editCloseBtn">סגור</button></div>';
+    document.body.appendChild(popup);
+
+    document.getElementById('editColorPicker').addEventListener('input', applyEditChanges);
+    document.getElementById('editOpacitySlider').addEventListener('input', applyEditChanges);
+    document.getElementById('editWeightSlider').addEventListener('input', applyEditChanges);
+    document.getElementById('editDeleteBtn').addEventListener('click', function() {
+        if (activeEditLayer) {
+            drawnItems.removeLayer(activeEditLayer);
+            activeEditLayer = null;
+            popup.classList.remove('visible');
+            persistShapes();
+        }
+    });
+    document.getElementById('editCloseBtn').addEventListener('click', function() {
+        popup.classList.remove('visible');
+        activeEditLayer = null;
+    });
+
+    return popup;
+}
+
+function applyEditChanges() {
+    if (!activeEditLayer) return;
+    var props = activeEditLayer.feature.properties;
+    var color = document.getElementById('editColorPicker').value;
+    var opacityPct = parseInt(document.getElementById('editOpacitySlider').value);
+    var weightVal = parseInt(document.getElementById('editWeightSlider').value);
+    document.getElementById('editOpacityVal').textContent = opacityPct + '%';
+    document.getElementById('editWeightVal').textContent = weightVal;
+
+    if (props.kind === 'marker') {
+        props.color = color;
+        props.size = weightVal;
+        var icon = makeMarkerDivIcon(props.size, props.color, props.iconKey, props.text);
+        activeEditLayer.setIcon(icon);
+    } else {
+        props.style.color = color;
+        props.style.opacity = opacityPct / 100;
+        props.style.weight = weightVal;
+        activeEditLayer.setStyle({
+            color: color, opacity: opacityPct / 100, weight: weightVal,
+            fillColor: color, fillOpacity: (props.kind === 'polygon') ? (opacityPct / 100) * 0.5 : undefined
         });
     }
+    persistShapes();
+}
 
-    function escapeHtml(text) {
-        var div = document.createElement('div');
-        div.innerText = text;
-        return div.innerHTML;
+// ===== שמירה/טעינה - מומר ל-GeoJSON ומועבר ל-Kotlin (filesDir, לא localStorage - יציב יותר באנדרויד) =====
+function persistShapes() {
+    var geoJson = drawnItems.toGeoJSON();
+    if (window.AndroidBridge && window.AndroidBridge.onShapesChanged) {
+        window.AndroidBridge.onShapesChanged(JSON.stringify(geoJson));
     }
+}
 
-    function addPinShape(lat, lon, text, style, id) {
-        var shapeId = id || nextShapeId++;
-        var layer = L.marker([lat, lon], { icon: makePinIcon(text, style.color) }).addTo(drawnItems);
-        registerShape(shapeId, layer, 'pin', style, text, [[lat, lon]]);
-        return shapeId;
-    }
-
-    function addLineShape(points, style, id) {
-        var shapeId = id || nextShapeId++;
-        var layer = L.polyline(points, {
-            color: style.color, opacity: style.opacity, weight: style.weight
-        }).addTo(drawnItems);
-        registerShape(shapeId, layer, 'line', style, null, points);
-        return shapeId;
-    }
-
-    function addPolygonShape(points, style, id) {
-        var shapeId = id || nextShapeId++;
-        var layer = L.polygon(points, {
-            color: style.color, fillColor: style.color,
-            opacity: style.opacity, fillOpacity: style.opacity * 0.5, weight: style.weight
-        }).addTo(drawnItems);
-        registerShape(shapeId, layer, 'polygon', style, null, points);
-        return shapeId;
-    }
-
-    function addCircleShape(centerLatLng, radiusMeters, style, id) {
-        var shapeId = id || nextShapeId++;
-        var layer = L.circle(centerLatLng, {
-            radius: radiusMeters,
-            color: style.color, fillColor: style.color,
-            opacity: style.opacity, fillOpacity: style.opacity * 0.5, weight: style.weight
-        }).addTo(drawnItems);
-        registerShape(shapeId, layer, 'circle', style, null, [centerLatLng], radiusMeters);
-        return shapeId;
-    }
-
-    function registerShape(id, layer, type, style, text, points, radius) {
-        shapesById[id] = { layer: layer, type: type, style: style, text: text, points: points, radius: radius };
-        layer.on('click', function(e) {
-            if (mapMode === 'edit') {
-                L.DomEvent.stopPropagation(e);
-                openStylePanelFor(id);
+function loadShapesFromJson(jsonStr) {
+    try {
+        var geoJson = JSON.parse(jsonStr);
+        L.geoJSON(geoJson, {
+            pointToLayer: function(feature, latlng) {
+                var props = feature.properties || {};
+                var icon = makeMarkerDivIcon(props.size || 26, props.color || '#e74c3c', props.iconKey || 'pin', props.text || '');
+                var layer = L.marker(latlng, { icon: icon });
+                layer.feature = { properties: props };
+                return layer;
+            },
+            style: function(feature) {
+                var props = feature.properties || {};
+                var s = props.style || { color: '#3498db', opacity: 1, weight: 3 };
+                return { color: s.color, opacity: s.opacity, weight: s.weight, fillColor: s.color, fillOpacity: (s.opacity || 1) * 0.5 };
+            },
+            onEachFeature: function(feature, layer) {
+                if (!layer.feature) layer.feature = { properties: feature.properties };
+                drawnItems.addLayer(layer);
+                attachEditHandler(layer);
             }
         });
-        notifyShapesChanged();
+    } catch (e) {
+        console.error('Failed to load saved shapes', e);
     }
+}
 
-    function deleteShape(id) {
-        var entry = shapesById[id];
-        if (!entry) return;
-        drawnItems.removeLayer(entry.layer);
-        delete shapesById[id];
-        notifyShapesChanged();
-    }
-
-    var pendingDrawType = null;
-    var pendingPoints = [];
-    var pendingTempLayer = null;
-    var pendingPinLatLng = null;
-    var pendingClickLatLng = null;
-
-    map.on('click', function(e) {
-        if (mapMode === 'select') {
-            var lat = e.latlng.lat.toFixed(6);
-            var lon = e.latlng.lng.toFixed(6);
-            setMarker(lat, lon);
-            if (window.AndroidBridge) {
-                window.AndroidBridge.onMapPointSelected(lat.toString(), lon.toString());
-            }
-        } else if (mapMode === 'draw') {
-            if (pendingDrawType === null) {
-                showDrawToolMenu(e.containerPoint, e.latlng);
-            } else {
-                handleDrawTap(e.latlng);
-            }
-        } else if (mapMode === 'edit') {
-            closeStylePanel();
-        }
-    });
-
-    function showDrawToolMenu(containerPoint, latlng) {
-        pendingClickLatLng = latlng;
-        var menu = document.getElementById('drawToolMenu');
-        menu.style.left = Math.min(containerPoint.x, map.getSize().x - 180) + 'px';
-        menu.style.top = Math.min(containerPoint.y, map.getSize().y - 200) + 'px';
-        menu.classList.add('visible');
-    }
-
-    function hideDrawToolMenu() {
-        document.getElementById('drawToolMenu').classList.remove('visible');
-    }
-
-    function selectDrawTool(type) {
-        hideDrawToolMenu();
-        pendingDrawType = type;
-        pendingPoints = [];
-
-        if (type === 'pin') {
-            pendingPinLatLng = pendingClickLatLng;
-            showTextInput();
-        } else if (type === 'circle') {
-            pendingPoints.push(pendingClickLatLng);
-        } else {
-            pendingPoints.push(pendingClickLatLng);
-            startTempLine();
-            document.getElementById('finishDrawBtn').classList.add('visible');
-        }
-    }
-
-    function handleDrawTap(latlng) {
-        if (pendingDrawType === 'circle') {
-            if (pendingPoints.length === 1) {
-                var center = pendingPoints[0];
-                var radius = center.distanceTo(latlng);
-                var style = defaultStyle();
-                addCircleShape(center, radius, style);
-                cancelCurrentDrawing();
-            }
-        } else if (pendingDrawType === 'line' || pendingDrawType === 'polygon') {
-            pendingPoints.push(latlng);
-            updateTempLine();
-        }
-    }
-
-    function startTempLine() {
-        pendingTempLayer = L.polyline(pendingPoints, { color: '#888', dashArray: '6,6', weight: 2 }).addTo(map);
-    }
-
-    function updateTempLine() {
-        if (pendingTempLayer) {
-            pendingTempLayer.setLatLngs(pendingPoints);
-        }
-    }
-
-    function finishCurrentDrawing() {
-        var style = defaultStyle();
-        if (pendingDrawType === 'line' && pendingPoints.length >= 2) {
-            addLineShape(pendingPoints.slice(), style);
-        } else if (pendingDrawType === 'polygon' && pendingPoints.length >= 3) {
-            addPolygonShape(pendingPoints.slice(), style);
-        }
-        cancelCurrentDrawing();
-    }
-
-    function cancelCurrentDrawing() {
-        pendingDrawType = null;
-        pendingPoints = [];
-        pendingPinLatLng = null;
-        if (pendingTempLayer) {
-            map.removeLayer(pendingTempLayer);
-            pendingTempLayer = null;
-        }
-        document.getElementById('finishDrawBtn').classList.remove('visible');
-        hideTextInput();
-    }
-
-    function showTextInput() {
-        document.getElementById('textInputField').value = '';
-        document.getElementById('textInputBox').classList.add('visible');
-    }
-
-    function hideTextInput() {
-        document.getElementById('textInputBox').classList.remove('visible');
-    }
-
-    function confirmTextInput() {
-        var text = document.getElementById('textInputField').value.trim();
-        if (pendingPinLatLng) {
-            var style = defaultStyle();
-            addPinShape(pendingPinLatLng.lat, pendingPinLatLng.lng, text, style);
-        }
-        cancelCurrentDrawing();
-    }
-
-    var selectedShapeId = null;
-
-    function openStylePanelFor(id) {
-        selectedShapeId = id;
-        var entry = shapesById[id];
-        if (!entry) return;
-
-        document.getElementById('styleColor').value = entry.style.color;
-        document.getElementById('styleOpacity').value = Math.round(entry.style.opacity * 100);
-        document.getElementById('styleOpacityVal').innerText = Math.round(entry.style.opacity * 100) + '%';
-        document.getElementById('styleWeight').value = entry.style.weight;
-        document.getElementById('styleWeightVal').innerText = entry.style.weight;
-
-        document.getElementById('stylePanel').classList.add('visible');
-    }
-
-    function onStyleChange() {
-        var opacityVal = document.getElementById('styleOpacity').value;
-        var weightVal = document.getElementById('styleWeight').value;
-        document.getElementById('styleOpacityVal').innerText = opacityVal + '%';
-        document.getElementById('styleWeightVal').innerText = weightVal;
-
-        if (selectedShapeId !== null) {
-            var entry = shapesById[selectedShapeId];
-            if (entry) {
-                entry.style = defaultStyle();
-                applyStyleToLayer(entry.layer, entry.type, entry.style);
-                notifyShapesChanged();
-            }
-        }
-    }
-
-    function deleteSelectedShape() {
-        if (selectedShapeId !== null) {
-            deleteShape(selectedShapeId);
-            closeStylePanel();
-        }
-    }
-
-    function closeStylePanel() {
-        selectedShapeId = null;
-        document.getElementById('stylePanel').classList.remove('visible');
-    }
-
-    function exportShapesAsJson() {
-        var result = [];
-        for (var id in shapesById) {
-            var entry = shapesById[id];
-            result.push({
-                type: entry.type,
-                style: entry.style,
-                text: entry.text,
-                points: entry.points.map(function(p) {
-                    return (p.lat !== undefined) ? [p.lat, p.lng] : p;
-                }),
-                radius: entry.radius
-            });
-        }
-        return JSON.stringify(result);
-    }
-
-    function notifyShapesChanged() {
-        if (window.AndroidBridge && window.AndroidBridge.onShapesChanged) {
-            window.AndroidBridge.onShapesChanged(exportShapesAsJson());
-        }
-    }
-
-    function loadShapesFromJson(jsonStr) {
-        try {
-            var shapes = JSON.parse(jsonStr);
-            shapes.forEach(function(s) {
-                if (s.type === 'pin') {
-                    addPinShape(s.points[0][0], s.points[0][1], s.text, s.style);
-                } else if (s.type === 'line') {
-                    addLineShape(s.points, s.style);
-                } else if (s.type === 'polygon') {
-                    addPolygonShape(s.points, s.style);
-                } else if (s.type === 'circle') {
-                    addCircleShape(s.points[0], s.radius, s.style);
-                }
-            });
-        } catch (e) {
-            console.error('Failed to load shapes', e);
-        }
-    }
-
-    function searchAddress(query) {
-        var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query);
-        fetch(url, { headers: { 'Accept-Language': 'he' } })
-            .then(function(resp) { return resp.json(); })
-            .then(function(results) {
-                if (results && results.length > 0) {
-                    var lat = parseFloat(results[0].lat);
-                    var lon = parseFloat(results[0].lon);
-                    map.setView([lat, lon], 16);
-                    setMarker(lat, lon);
-                    if (window.AndroidBridge && window.AndroidBridge.onAddressSearchResult) {
-                        window.AndroidBridge.onAddressSearchResult(true, lat.toFixed(6), lon.toFixed(6), results[0].display_name || '');
-                    }
-                } else {
-                    if (window.AndroidBridge && window.AndroidBridge.onAddressSearchResult) {
-                        window.AndroidBridge.onAddressSearchResult(false, '', '', '');
-                    }
-                }
-            })
-            .catch(function() {
+// ===== חיפוש כתובת (Nominatim) =====
+function searchAddress(query) {
+    var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query);
+    fetch(url, { headers: { 'Accept-Language': 'he' } })
+        .then(function(resp) { return resp.json(); })
+        .then(function(results) {
+            if (results && results.length > 0) {
+                var lat = parseFloat(results[0].lat);
+                var lon = parseFloat(results[0].lon);
+                map.setView([lat, lon], 16);
+                setMarker(lat, lon);
                 if (window.AndroidBridge && window.AndroidBridge.onAddressSearchResult) {
-                    window.AndroidBridge.onAddressSearchResult(false, '', '', '');
+                    window.AndroidBridge.onAddressSearchResult(true, lat.toFixed(6), lon.toFixed(6), results[0].display_name || '');
                 }
-            });
+            } else if (window.AndroidBridge && window.AndroidBridge.onAddressSearchResult) {
+                window.AndroidBridge.onAddressSearchResult(false, '', '', '');
+            }
+        })
+        .catch(function() {
+            if (window.AndroidBridge && window.AndroidBridge.onAddressSearchResult) {
+                window.AndroidBridge.onAddressSearchResult(false, '', '', '');
+            }
+        });
+}
+
+document.getElementById('addressSearchBtn').addEventListener('click', function() {
+    var q = document.getElementById('addressInput').value.trim();
+    if (q) searchAddress(q);
+});
+document.getElementById('addressInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        var q = e.target.value.trim();
+        if (q) searchAddress(q);
     }
+});
+
+// ===== כפתורי GPS =====
+document.getElementById('btnGpsCenter').addEventListener('click', function() {
+    if (window.AndroidBridge && window.AndroidBridge.onRequestGpsCenter) {
+        window.AndroidBridge.onRequestGpsCenter();
+    }
+});
+
+document.getElementById('btnGpsFollow').addEventListener('click', function() {
+    if (window.AndroidBridge && window.AndroidBridge.onToggleGpsFollow) {
+        window.AndroidBridge.onToggleGpsFollow();
+    }
+});
+
+function setGpsFollowUiState(active) {
+    var btn = document.getElementById('btnGpsFollow');
+    btn.classList.toggle('gps-follow-on', active);
+    btn.classList.toggle('gps-follow-off', !active);
+}
+
+// ===== כפתור סגירת מפה (נשלט/מוצג רק כשרץ בתוך מעטפת native) =====
+document.getElementById('mapCloseBtn').addEventListener('click', function() {
+    if (window.AndroidBridge && window.AndroidBridge.onRequestCloseMap) {
+        window.AndroidBridge.onRequestCloseMap();
+    }
+});
+
+function showCloseButton() {
+    document.getElementById('mapCloseBtn').classList.add('visible');
+}
+
+setUiMode('select');
+// [END: MapLogic]
+
 </script>
 </body>
 </html>
