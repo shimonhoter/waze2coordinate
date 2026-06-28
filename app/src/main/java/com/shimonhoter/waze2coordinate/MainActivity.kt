@@ -236,49 +236,43 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * מאתר את המיקום הנוכחי של המכשיר באמצעות LocationManager (GPS + Network providers,
-     * כל מה שזמין) ומרכז את המפה אליו. משתמש ב-getLastKnownLocation לתשובה מיידית,
-     * ובמקביל מבקש עדכון חד-פעמי טרי (single update) כדי לדייק אם יש המתנה.
+     * מאתר את המיקום הנוכחי של המכשיר ומרכז את המפה אליו. משתמש *רק* ב-GPS provider
+     * (לא Network provider, שמדויק בהרבה פחות ויכול לסטות מאות מטרים - זה היה הגורם
+     * לסטייה שנראתה לעומת Google Maps). מסנן גם fixes ישנים (מעל 30 שניות) או לא מדויקים
+     * (accuracy גרוע מ-50 מטר) מתוך ה-lastKnownLocation, כדי לא להציג מיקום מיושן/שגוי
+     * לפני שמתקבל fix טרי.
      */
     @SuppressLint("MissingPermission")
     private fun centerMapOnGps() {
         val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
 
-        val providers = locationManager.getProviders(true)
-        var lastKnown: android.location.Location? = null
-        for (provider in providers) {
-            val loc = locationManager.getLastKnownLocation(provider)
-            if (loc != null && (lastKnown == null || loc.time > lastKnown!!.time)) {
-                lastKnown = loc
-            }
-        }
-
-        if (lastKnown != null) {
-            sendGpsToMap(lastKnown!!.latitude, lastKnown!!.longitude)
-        }
-
-        // בקשת עדכון חד-פעמי טרי, ליתר דיוק (בעיקר רלוונטי אם אין עדיין lastKnownLocation בכלל)
-        val bestProvider = locationManager.getBestProvider(
-            android.location.Criteria().apply { accuracy = android.location.Criteria.ACCURACY_FINE },
-            true
-        )
-        if (bestProvider != null) {
-            try {
-                locationManager.requestSingleUpdate(bestProvider, object : android.location.LocationListener {
-                    override fun onLocationChanged(location: android.location.Location) {
-                        sendGpsToMap(location.latitude, location.longitude)
-                    }
-                }, Looper.getMainLooper())
-            } catch (e: SecurityException) {
-                // הרשאה לא קיימת בפועל (race condition נדיר) - מתעלמים, ה-lastKnown מספיק
-            }
-        } else if (lastKnown == null) {
+        if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
             Toast.makeText(this, getString(R.string.error_location_unavailable), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val lastKnown = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+        val isFresh = lastKnown != null && (System.currentTimeMillis() - lastKnown.time) < 30_000
+        val isAccurate = lastKnown != null && (!lastKnown.hasAccuracy() || lastKnown.accuracy <= 50f)
+
+        if (lastKnown != null && isFresh && isAccurate) {
+            sendGpsToMap(lastKnown.latitude, lastKnown.longitude, lastKnown.accuracy)
+        }
+
+        try {
+            locationManager.requestSingleUpdate(LocationManager.GPS_PROVIDER, object : android.location.LocationListener {
+                override fun onLocationChanged(location: android.location.Location) {
+                    sendGpsToMap(location.latitude, location.longitude, location.accuracy)
+                }
+            }, Looper.getMainLooper())
+        } catch (e: SecurityException) {
+            // הרשאה לא קיימת בפועל (race condition נדיר) - מתעלמים
         }
     }
 
-    private fun sendGpsToMap(lat: Double, lon: Double) {
-        binding.mapWebView.evaluateJavascript("centerOnGps('$lat', '$lon')", null)
+    private fun sendGpsToMap(lat: Double, lon: Double, accuracy: Float? = null) {
+        val accuracyArg = accuracy?.toString() ?: "null"
+        binding.mapWebView.evaluateJavascript("centerOnGps('$lat', '$lon', $accuracyArg)", null)
     }
 
     // ============ מעקב GPS רציף (טוגל הדלקה/כיבוי) ============
@@ -308,22 +302,26 @@ class MainActivity : AppCompatActivity() {
     private var pendingGpsFollowAfterPermission = false
 
     /**
-     * מתחיל מעקב רציף אחרי מיקום ה-GPS, ומרכז את המפה אוטומטית בכל עדכון מיקום.
-     * נשאר פעיל כל עוד הטוגל מודלק, גם אם המשתמש סוגר ופותח את המפה מחדש.
+     * מתחיל מעקב רציף אחרי מיקום ה-GPS (provider מדויק בלבד, לא Network), ומרכז את המפה
+     * אוטומטית בכל עדכון מיקום. מעדכן כל שנייה (1000ms) כפי שנדרש. נשאר פעיל כל עוד
+     * הטוגל מודלק, גם אם המשתמש סוגר ופותח את המפה מחדש.
      */
     @SuppressLint("MissingPermission")
     private fun startGpsFollow() {
         val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+
+        if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            Toast.makeText(this, getString(R.string.error_location_unavailable), Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val listener = android.location.LocationListener { location ->
-            sendGpsToMap(location.latitude, location.longitude)
+            sendGpsToMap(location.latitude, location.longitude, location.accuracy)
         }
         gpsFollowListener = listener
 
         try {
-            val providers = locationManager.getProviders(true)
-            for (provider in providers) {
-                locationManager.requestLocationUpdates(provider, 3000L, 5f, listener, Looper.getMainLooper())
-            }
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, listener, Looper.getMainLooper())
             isGpsFollowActive = true
             updateGpsFollowButtonState()
             Toast.makeText(this, getString(R.string.gps_follow_on), Toast.LENGTH_SHORT).show()
