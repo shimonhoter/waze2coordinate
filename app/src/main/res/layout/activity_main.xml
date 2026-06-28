@@ -1,44 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootFrame"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/app_background">
 
     <ScrollView
+        android:id="@+id/mainScrollView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:fillViewport="true"
         android:background="@color/app_background">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="18dp"
+        android:paddingBottom="18dp"
         android:layoutDirection="rtl">
 
-        <!-- כותרת + טוגל מצב כהה/בהיר, שורה אחת רגועה -->
+        <!-- כותרת + טוגל מצב כהה/בהיר -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="20dp">
+            android:layout_marginBottom="16dp">
 
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="@string/app_name"
-                android:textSize="19sp"
+                android:textSize="20sp"
                 android:textStyle="bold"
-                android:textColor="@color/app_text_primary" />
+                android:textColor="@color/app_text_primary"
+                android:letterSpacing="-0.01" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnToggleTheme"
                 style="?attr/materialIconButtonStyle"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
                 app:icon="@drawable/ic_theme_toggle"
+                app:iconSize="22dp"
                 app:iconTint="@color/app_text_secondary" />
 
         </LinearLayout>
@@ -47,9 +56,9 @@
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="16dp"
+            app:cardCornerRadius="18dp"
             app:cardElevation="0dp"
-            app:strokeWidth="1dp"
+            app:strokeWidth="1.5dp"
             app:strokeColor="@color/app_border"
             app:cardBackgroundColor="@color/app_surface">
 
@@ -57,13 +66,13 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="18dp">
+                android:padding="16dp">
 
                 <com.google.android.material.button.MaterialButtonToggleGroup
                     android:id="@+id/sourceToggle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="14dp"
+                    android:layout_marginBottom="12dp"
                     app:singleSelection="true"
                     app:selectionRequired="true">
 
@@ -71,24 +80,26 @@
                         android:id="@+id/btnSourceWaze"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp"
-                        android:layout_height="44dp"
+                        android:layout_height="46dp"
                         android:layout_weight="1"
                         android:textSize="13sp"
+                        android:textAllCaps="false"
                         android:textColor="@color/app_text_primary"
                         android:text="@string/source_waze"
-                        app:cornerRadius="10dp"
+                        app:cornerRadius="12dp"
                         app:strokeColor="@color/app_border" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnSourceMaps"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp"
-                        android:layout_height="44dp"
+                        android:layout_height="46dp"
                         android:layout_weight="1"
                         android:textSize="13sp"
+                        android:textAllCaps="false"
                         android:textColor="@color/app_text_primary"
                         android:text="@string/source_maps"
-                        app:cornerRadius="10dp"
+                        app:cornerRadius="12dp"
                         app:strokeColor="@color/app_border" />
 
                 </com.google.android.material.button.MaterialButtonToggleGroup>
@@ -100,12 +111,13 @@
                     android:hint="@string/hint_url"
                     app:boxBackgroundColor="@color/app_surface_alt"
                     app:boxStrokeWidth="0dp"
-                    app:boxStrokeWidthFocused="1dp"
+                    app:boxStrokeWidthFocused="1.5dp"
+                    app:boxStrokeColor="@color/app_primary"
                     app:hintTextColor="@color/app_text_secondary"
-                    app:boxCornerRadiusTopStart="10dp"
-                    app:boxCornerRadiusTopEnd="10dp"
-                    app:boxCornerRadiusBottomStart="10dp"
-                    app:boxCornerRadiusBottomEnd="10dp">
+                    app:boxCornerRadiusTopStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusBottomEnd="12dp">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/editUrl"
@@ -113,51 +125,29 @@
                         android:layout_height="wrap_content"
                         android:inputType="textUri"
                         android:textDirection="ltr"
+                        android:textSize="14sp"
                         android:textColor="@color/app_text_primary"
                         android:gravity="start" />
 
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <LinearLayout
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnConvert"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="12dp">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnPickOnMap"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="8dp"
-                        android:text="@string/btn_pick_on_map"
-                        android:textSize="13sp"
-                        android:textColor="@color/app_text_primary"
-                        app:cornerRadius="10dp"
-                        app:strokeColor="@color/app_border"
-                        app:icon="@drawable/ic_map"
-                        app:iconTint="@color/app_text_secondary"
-                        app:iconGravity="textStart" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnConvert"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_weight="1"
-                        android:text="@string/btn_convert"
-                        android:textSize="14sp"
-                        app:cornerRadius="10dp"
-                        app:backgroundTint="@color/app_primary" />
-
-                </LinearLayout>
+                    android:layout_height="50dp"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/btn_convert"
+                    android:textSize="14sp"
+                    android:textAllCaps="false"
+                    app:cornerRadius="12dp"
+                    app:backgroundTint="@color/app_primary" />
 
                 <ProgressBar
                     android:id="@+id/progressBar"
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
                     android:layout_gravity="center"
-                    android:layout_marginTop="14dp"
+                    android:layout_marginTop="12dp"
                     android:indeterminateTint="@color/app_primary"
                     android:visibility="gone" />
 
@@ -165,7 +155,7 @@
                     android:id="@+id/errorText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
+                    android:layout_marginTop="12dp"
                     android:padding="12dp"
                     android:background="@drawable/bg_error"
                     android:textColor="@color/app_error"
@@ -178,15 +168,78 @@
 
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- מפה מוטמעת - גובה ניתן לשינוי בגרירה, כפתור הרחבה למסך מלא בפינה -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            app:cardCornerRadius="18dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="1.5dp"
+            app:strokeColor="@color/app_border"
+            app:cardBackgroundColor="@color/app_surface">
+
+            <LinearLayout
+                android:id="@+id/mapCardContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <FrameLayout
+                    android:id="@+id/embeddedMapContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="240dp">
+
+                    <WebView
+                        android:id="@+id/mapWebView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnExpandMap"
+                        style="?attr/materialIconButtonFilledStyle"
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:layout_gravity="top|start"
+                        android:layout_margin="10dp"
+                        android:contentDescription="@string/btn_pick_on_map"
+                        app:icon="@drawable/ic_expand"
+                        app:iconSize="18dp"
+                        app:backgroundTint="@color/app_surface"
+                        app:iconTint="@color/app_text_primary" />
+
+                </FrameLayout>
+
+                <!-- ידית גרירה לשינוי גובה אזור המפה -->
+                <LinearLayout
+                    android:id="@+id/mapResizeHandle"
+                    android:layout_width="match_parent"
+                    android:layout_height="22dp"
+                    android:gravity="center"
+                    android:background="@color/app_surface_alt"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <View
+                        android:layout_width="36dp"
+                        android:layout_height="4dp"
+                        android:background="@drawable/bg_resize_grip" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- כרטיס תוצאה - מופיע רק כשיש קואורדינטות -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/resultLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            app:cardCornerRadius="16dp"
+            app:cardCornerRadius="18dp"
             app:cardElevation="0dp"
-            app:strokeWidth="1dp"
+            app:strokeWidth="1.5dp"
             app:strokeColor="@color/app_border"
             app:cardBackgroundColor="@color/app_surface"
             android:visibility="gone">
@@ -195,7 +248,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="18dp">
+                android:padding="16dp">
 
                 <!-- הקואורדינטה היא האלמנט המוביל - גדולה, מונוספייס, ניתנת להעתקה בהקשה -->
                 <LinearLayout
@@ -205,6 +258,7 @@
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
                     android:background="@drawable/bg_coord_pill"
+                    android:foreground="?attr/selectableItemBackground"
                     android:padding="14dp"
                     android:clickable="true"
                     android:focusable="true">
@@ -217,7 +271,7 @@
                         android:textDirection="ltr"
                         android:gravity="center"
                         android:fontFamily="monospace"
-                        android:textSize="17sp"
+                        android:textSize="16sp"
                         android:textStyle="bold"
                         android:textColor="@color/app_primary_dark" />
 
@@ -229,39 +283,70 @@
 
                 </LinearLayout>
 
-                <!-- שורת פעולות איקונים - העתק / מפות / נווט -->
+                <!-- שורת פעולות - מפות/ניווט עם תווית מותג גנרית (לא לוגו רשמי), העתק -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:layout_marginTop="12dp"
-                    android:gravity="center">
+                    android:layout_marginTop="12dp">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnCopy"
-                        style="?attr/materialIconButtonFilledTonalStyle"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_marginEnd="10dp"
-                        app:icon="@drawable/ic_copy"
-                        app:iconTint="@color/app_text_primary" />
-
-                    <com.google.android.material.button.MaterialButton
+                    <LinearLayout
                         android:id="@+id/btnOpenMaps"
-                        style="?attr/materialIconButtonFilledTonalStyle"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        android:layout_marginEnd="10dp"
-                        app:icon="@drawable/ic_pin"
-                        app:iconTint="@color/app_text_primary" />
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:background="@drawable/bg_action_chip"
+                        android:foreground="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true">
 
-                    <com.google.android.material.button.MaterialButton
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginEnd="6dp"
+                            android:src="@drawable/ic_pin"
+                            app:tint="@color/app_text_primary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_google_maps"
+                            android:textSize="12sp"
+                            android:textColor="@color/app_text_primary" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:id="@+id/btnNavigateWaze"
-                        style="?attr/materialIconButtonFilledTonalStyle"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
-                        app:icon="@drawable/ic_navigate"
-                        app:iconTint="@color/app_text_primary" />
+                        android:layout_width="0dp"
+                        android:layout_height="46dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:background="@drawable/bg_action_chip"
+                        android:foreground="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true">
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginEnd="6dp"
+                            android:src="@drawable/ic_navigate"
+                            app:tint="@color/app_text_primary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/label_waze"
+                            android:textSize="12sp"
+                            android:textColor="@color/app_text_primary" />
+
+                    </LinearLayout>
 
                 </LinearLayout>
 
@@ -278,17 +363,19 @@
                     android:hint="@string/hint_description"
                     app:boxBackgroundColor="@color/app_surface_alt"
                     app:boxStrokeWidth="0dp"
-                    app:boxStrokeWidthFocused="1dp"
+                    app:boxStrokeWidthFocused="1.5dp"
+                    app:boxStrokeColor="@color/app_primary"
                     app:hintTextColor="@color/app_text_secondary"
-                    app:boxCornerRadiusTopStart="10dp"
-                    app:boxCornerRadiusTopEnd="10dp"
-                    app:boxCornerRadiusBottomStart="10dp"
-                    app:boxCornerRadiusBottomEnd="10dp">
+                    app:boxCornerRadiusTopStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusBottomEnd="12dp">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/editDescription"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:textSize="14sp"
                         android:textColor="@color/app_text_primary"
                         android:inputType="textCapSentences" />
 
@@ -298,11 +385,12 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnSendMessage"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
+                    android:layout_height="50dp"
                     android:layout_marginTop="10dp"
                     android:text="@string/btn_send_message"
                     android:textSize="14sp"
-                    app:cornerRadius="10dp"
+                    android:textAllCaps="false"
+                    app:cornerRadius="12dp"
                     app:backgroundTint="@color/app_success"
                     app:icon="@drawable/ic_send"
                     app:iconGravity="textStart" />
@@ -315,21 +403,18 @@
 
     </ScrollView>
 
-    <!-- מסך מפה במסך מלא - מכוסה על כל המסך כשהוא פעיל (visibility=gone כברירת מחדל).
-         כל ממשק המשתמש (סרגל כלים, חיפוש כתובת, כפתורי GPS, רמזים) מצויר בתוך ה-HTML/JS
-         עצמו (map.html) ולא ב-native, כדי לתמוך בעיצוב המודרני המבוסס Leaflet.Draw. -->
-    <FrameLayout
-        android:id="@+id/mapFullscreenContainer"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="#ffffff"
-        android:visibility="gone">
-
-        <WebView
-            android:id="@+id/mapWebView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-
-    </FrameLayout>
+    <!-- כפתור "כווץ" - מוצג רק כשהמפה מורחבת למסך מלא, חופף את כל הדף -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnCollapseMap"
+        style="?attr/materialIconButtonFilledStyle"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="14dp"
+        app:icon="@drawable/ic_collapse"
+        app:iconSize="20dp"
+        app:backgroundTint="@color/app_surface"
+        app:iconTint="@color/app_text_primary"
+        android:visibility="gone" />
 
 </FrameLayout>

@@ -12,10 +12,13 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.MotionEvent
 import android.view.PixelCopy
 import android.view.View
+import android.view.ViewGroup
 import android.graphics.Rect
 import android.webkit.JavascriptInterface
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -52,7 +55,8 @@ class MainActivity : AppCompatActivity() {
         .build()
 
     private var currentSource: Source = Source.WAZE
-    private var isMapVisible = false
+    private var isMapExpanded = false
+    private var embeddedMapHeightPx = 0
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -90,11 +94,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupMapWebView()
+        setupMapResizeHandle()
 
-        binding.btnPickOnMap.setOnClickListener { openFullscreenMap() }
+        binding.btnExpandMap.setOnClickListener { expandMap() }
+        binding.btnCollapseMap.setOnClickListener { collapseMap() }
 
         binding.btnConvert.setOnClickListener { handleConvert() }
-        binding.btnCopy.setOnClickListener { copyToClipboard() }
         binding.coordPill.setOnClickListener { copyToClipboard() }
         binding.btnOpenMaps.setOnClickListener { openInGoogleMaps() }
         binding.btnNavigateWaze.setOnClickListener { navigateWithWaze() }
@@ -172,7 +177,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun onRequestCloseMap() {
             runOnUiThread {
-                closeFullscreenMap()
+                if (isMapExpanded) collapseMap()
             }
         }
     }
@@ -183,12 +188,12 @@ class MainActivity : AppCompatActivity() {
         webView.settings.domStorageEnabled = true
         webView.addJavascriptInterface(MapJsBridge(), "AndroidBridge")
 
-        // טוען את הציורים השמורים מהדיסק לתוך המפה ברגע שהדף סיים להיטען,
-        // ומציג את כפתור הסגירה (מוסתר כברירת מחדל ב-HTML, רלוונטי רק בתוך מעטפת native)
+        // טוען את הציורים השמורים מהדיסק לתוך המפה ברגע שהדף סיים להיטען, ומאתחל
+        // אותה למצב "מוטמעת" (ללא סרגל כלים/חיפוש/GPS - רק מפה נקייה עם סמן בחירה).
         webView.webViewClient = object : android.webkit.WebViewClient() {
             override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                webView.evaluateJavascript("showCloseButton()", null)
+                webView.evaluateJavascript("setEmbeddedChromeVisible(false)", null)
                 val savedJson = loadShapesFromDisk()
                 if (savedJson != null) {
                     webView.evaluateJavascript("loadShapesFromJson(${JSONObject.quote(savedJson)})", null)
@@ -199,58 +204,103 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl("file:///android_asset/map.html")
     }
 
-    /** קובץ שמירת הציורים על הדיסק - נשמר ב-filesDir כך שהוא פרטי לאפליקציה ולא נמחק עם cache */
-    private val shapesFile: File
-        get() = File(filesDir, "saved_shapes.json")
+    /**
+     * ידית הגרירה שמתחת לאזור המפה המוטמעת - גרירה אנכית משנה את גובה ה-FrameLayout
+     * שעוטף את ה-WebView בזמן אמת. מוגבל לטווח גובה הגיוני (120dp עד 70% מגובה המסך)
+     * כדי שהאזור לא יתכווץ/יתפוצץ למידות לא שמישות.
+     */
+    private fun setupMapResizeHandle() {
+        val minHeightPx = (120 * resources.displayMetrics.density).toInt()
+        var startHeight = 0
+        var startY = 0f
 
-    private fun saveShapesToDisk(shapesJson: String) {
-        try {
-            shapesFile.writeText(shapesJson)
-        } catch (e: Exception) {
-            // כשל בשמירה לא אמור לקרוס את האפליקציה - הציור נשאר תקף בזיכרון להמשך הסשן
+        binding.mapResizeHandle.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startHeight = binding.embeddedMapContainer.height
+                    startY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val maxHeightPx = (resources.displayMetrics.heightPixels * 0.7).toInt()
+                    val delta = (event.rawY - startY).toInt()
+                    val newHeight = (startHeight + delta).coerceIn(minHeightPx, maxHeightPx)
+                    val params = binding.embeddedMapContainer.layoutParams
+                    params.height = newHeight
+                    binding.embeddedMapContainer.layoutParams = params
+                    embeddedMapHeightPx = newHeight
+                    true
+                }
+                else -> true
+            }
         }
-    }
-
-    private fun loadShapesFromDisk(): String? {
-        return try {
-            if (shapesFile.exists()) shapesFile.readText() else null
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    /** פותח את חלון המפה במסך מלא */
-    private fun openFullscreenMap() {
-        isMapVisible = true
-        binding.mapFullscreenContainer.visibility = View.VISIBLE
     }
 
     /**
-     * סוגר את חלון המפה ומחזיר למסך הראשי. לפני הסגירה בפועל, מסתיר זמנית (דרך JS)
-     * את כל פקדי הממשק (סרגל כלים, חיפוש, GPS, רמזים, וגם בקרות הזום הטבעיות של
-     * Leaflet) ומצלם snapshot "נקי" שמכיל רק את המפה והסימונים עליה - בדיוק כפי
-     * שהמשתמש ראה אותם ברגע הסגירה, בלי קשר לאיזה תפריט/מצב היה פתוח. הפעולה כולה
-     * חולפת באופן אסינכרוני (פחות מ-frame), כך שהמשתמש לא רואה את ה"ניקוי" החזותי.
+     * מרחיב את המפה למסך מלא: מעלה את ה-container הקיים (לא יוצר WebView חדש - כך
+     * שלא נטען מחדש ולא מאבד מצב) לשכבה העליונה ביותר של המסך, משנה את מימדיו ל-
+     * match_parent, ומבקש מה-JS להציג את כל פקדי הממשק (סרגל כלים, חיפוש, GPS).
      */
-    private fun closeFullscreenMap() {
+    private fun expandMap() {
+        isMapExpanded = true
+        embeddedMapHeightPx = binding.embeddedMapContainer.height
+
+        val container = binding.embeddedMapContainer
+        (container.parent as? ViewGroup)?.let { oldParent ->
+            oldParent.removeView(container)
+        }
+
+        val params = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        )
+        binding.rootFrame.addView(container, params)
+        container.bringToFront()
+
+        binding.btnExpandMap.visibility = View.GONE
+        binding.btnCollapseMap.visibility = View.VISIBLE
+        binding.btnCollapseMap.bringToFront()
+
+        binding.mapWebView.evaluateJavascript("setEmbeddedChromeVisible(true)", null)
+    }
+
+    /**
+     * מחזיר את המפה למצב מוטמעת: מקבל snapshot "נקי" (ללא UI) כמו בעבר, מחזיר את
+     * ה-container לכרטיס המקורי בתוך הגלילה, ומסתיר את פקדי הממשק המתקדמים מהמפה.
+     */
+    private fun collapseMap() {
         binding.mapWebView.evaluateJavascript("setCleanCaptureMode(true)") {
-            // השהיה של frame אחד (16ms) כדי להבטיח שהדפדפן סיים לצייר את מצב ה-UI הנקי
-            // לפני שלוכדים את ה-snapshot.
             binding.mapWebView.postDelayed({
                 captureMapSnapshot { uri ->
                     cachedSnapshotUri = uri
                     binding.mapWebView.evaluateJavascript("setCleanCaptureMode(false)", null)
-                    isMapVisible = false
-                    binding.mapFullscreenContainer.visibility = View.GONE
+                    binding.mapWebView.evaluateJavascript("setEmbeddedChromeVisible(false)", null)
+
+                    val container = binding.embeddedMapContainer
+                    (container.parent as? ViewGroup)?.removeView(container)
+
+                    // מחזירים את ה-container לכרטיס המקורי, בדיוק במקום שבו הוא חי ב-XML
+                    val cardContent = binding.mapCardContent
+                    val params = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        if (embeddedMapHeightPx > 0) embeddedMapHeightPx else (240 * resources.displayMetrics.density).toInt()
+                    )
+                    cardContent.addView(container, 0, params)
+
+                    isMapExpanded = false
+                    binding.btnCollapseMap.visibility = View.GONE
+                    binding.btnExpandMap.visibility = View.VISIBLE
                 }
             }, 16)
         }
     }
 
     /**
-     * כשבוחרים נקודה במפה - בונים קישור Google Maps תקני (q=lat,lon), שמים בשדה,
-     * עוברים אוטומטית לטוגל "קישור Google Maps", ממירים אותו (מיידי, ללא קריאת רשת
-     * כי הקואורדינטות כבר בקישור עצמו), וסוגרים את המפה בחזרה למסך הראשי.
+     * כשבוחרים נקודה במפה (במצב select, גם מוטמע וגם מורחב) - בונים קישור Google Maps
+     * תקני (q=lat,lon), שמים בשדה, עוברים אוטומטית לטוגל "קישור Google Maps", וממירים
+     * אותו (מיידי, ללא קריאת רשת כי הקואורדינטות כבר בקישור עצמו). אם המפה הייתה
+     * מורחבת למסך מלא בזמן הבחירה - מכווצים אותה בחזרה אוטומטית; במצב מוטמע נשארת
+     * המפה גלויה כרגיל בעמוד הראשי.
      */
     private fun onMapTapped(lat: String, lon: String) {
         currentSource = Source.MAPS
@@ -261,7 +311,9 @@ class MainActivity : AppCompatActivity() {
         binding.editUrl.setText(mapsUrl)
         handleConvert()
 
-        closeFullscreenMap()
+        if (isMapExpanded) {
+            collapseMap()
+        }
     }
 
     /** בודק הרשאת מיקום ומבקש אותה אם חסרה; אם יש הרשאה כבר - ממרכז ישירות */
@@ -614,12 +666,12 @@ class MainActivity : AppCompatActivity() {
         binding.coordCombined.text = "${coords.lat}, ${coords.lon}"
         binding.resultLayout.visibility = View.VISIBLE
 
-        openFullscreenMap()
+        // ממרכזים את המפה המוטמעת על התוצאה - היא תמיד גלויה בעמוד, אין צורך להרחיב
+        // אותה אוטומטית. ה-snapshot ל-WhatsApp נלכד בנפרד בעת כיווץ (אם המשתמש הרחיב
+        // את המפה והוסיף ציורים), או נכשל בחן אם נדרש בלי שהמפה הורחבה כלל.
         binding.mapWebView.evaluateJavascript(
             "centerOnCoordinates('${coords.lat}', '${coords.lon}')", null
         )
-        // ה-snapshot ל-WhatsApp נלכד אוטומטית ברגע הסגירה בפועל של חלון המפה
-        // (closeFullscreenMap), נקי מכל פקד ממשק - לא כאן.
     }
 
     private fun copyToClipboard() {
@@ -778,22 +830,34 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * שולח ב-WhatsApp את אותו טקסט בתור קאפשן, בצירוף תצלום (snapshot) "נקי" של המפה -
-     * רק המפה והסימונים עליה, בלי שום פקד ממשק (סרגל כלים, חיפוש, GPS, רמזים, בקרות זום).
-     * התצלום נלכד אוטומטית בכל סגירה של חלון המפה (closeFullscreenMap), בדיוק כפי שהמפה
-     * נראתה באותו רגע - לא כאן מחדש, כדי לא לסכן צילום שמכיל UI אם המפה עדיין פתוחה.
+     * רק המפה והסימונים עליה, בלי שום פקד ממשק. אם יש כבר תצלום במטמון (מהרחבה/כיווץ
+     * קודמים בסשן הזה) - משתמשים בו. אחרת לוכדים כרגע תצלום של המפה המוטמעת כמו שהיא,
+     * כי במצב מוטמע אין UI מוצג מעליה מלכתחילה (chrome מוסתר כברירת מחדל).
      * אם הצילום נכשל מסיבה כלשהי - נשלח לפחות הטקסט בלבד, כדי שהפעולה לא תיכשל כליל.
      */
     private fun sendViaWhatsapp() {
         val coords = lastCoords ?: return
+
+        if (cachedSnapshotUri != null) {
+            launchWhatsappIntent(coords, cachedSnapshotUri)
+        } else {
+            captureMapSnapshot { uri ->
+                cachedSnapshotUri = uri
+                launchWhatsappIntent(coords, uri)
+            }
+        }
+    }
+
+    private fun launchWhatsappIntent(coords: Coordinates, snapshotUri: Uri?) {
         val message = buildShareMessage(coords)
         val activityContext = this
 
         val intent = Intent(Intent.ACTION_SEND).apply {
             setPackage("com.whatsapp")
             putExtra(Intent.EXTRA_TEXT, message)
-            if (cachedSnapshotUri != null) {
+            if (snapshotUri != null) {
                 type = "image/png"
-                putExtra(Intent.EXTRA_STREAM, cachedSnapshotUri)
+                putExtra(Intent.EXTRA_STREAM, snapshotUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             } else {
                 type = "text/plain"

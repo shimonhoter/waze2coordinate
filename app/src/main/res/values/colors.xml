@@ -2,17 +2,17 @@
 <resources>
     <color name="ic_launcher_background">#2c3e50</color>
 
-    <!-- מערכת צבעים אחידה - מצב בהיר -->
-    <color name="app_background">#FAFBFC</color>
-    <color name="app_surface">#FFFFFF</color>
-    <color name="app_surface_alt">#F1F4F8</color>
-    <color name="app_text_primary">#1A2332</color>
-    <color name="app_text_secondary">#5B6470</color>
-    <color name="app_border">#E2E8F0</color>
+    <!-- מערכת צבעים אחידה - מצב בהיר, גווני אופוייט (off-white) חמים -->
+    <color name="app_background">#FAF8F4</color>
+    <color name="app_surface">#FFFEFB</color>
+    <color name="app_surface_alt">#F2EEE6</color>
+    <color name="app_text_primary">#262320</color>
+    <color name="app_text_secondary">#6B6660</color>
+    <color name="app_border">#E5DFD5</color>
     <color name="app_primary">#3B82F6</color>
     <color name="app_primary_dark">#2563EB</color>
     <color name="app_success">#10B981</color>
-    <color name="app_error">#EF4444</color>
-    <color name="app_error_bg">#FEF2F2</color>
-    <color name="app_icon_muted">#94A3B8</color>
+    <color name="app_error">#DC2626</color>
+    <color name="app_error_bg">#FBEAEA</color>
+    <color name="app_icon_muted">#9B958A</color>
 </resources>

@@ -4,11 +4,13 @@
     <string name="hint_url_maps">הדבק כאן קישור Google Maps</string>
     <string name="source_waze">קישור Waze</string>
     <string name="source_maps">קישור Google Maps</string>
-    <string name="btn_convert">חלץ קואורדינטות</string>
+    <string name="btn_convert">מצא קואורדינטות</string>
     <string name="btn_copy">העתק</string>
     <string name="btn_open_maps">פתח ב-Google Maps</string>
     <string name="btn_navigate_waze">נווט עם Waze</string>
-    <string name="btn_pick_on_map">בחר מיקום על המפה</string>
+    <string name="btn_pick_on_map">בחר מיקום</string>
+    <string name="label_google_maps">Google Maps</string>
+    <string name="label_waze">Waze</string>
     <string name="error_location_unavailable">לא ניתן לאתר את המיקום הנוכחי. ודא ש-GPS מופעל.</string>
     <string name="error_location_permission_denied">נדרשת הרשאת מיקום כדי למרכז את המפה למיקומך</string>
     <string name="label_lat">קו רוחב (Lat)</string>
