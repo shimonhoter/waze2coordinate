@@ -265,6 +265,21 @@
             margin-top: 2px;
         }
 
+        /* תווית טקסט חופשית - בלי פין, רק טקסט עם הילה לבנה כדי שיהיה קריא על כל רקע מפה */
+        .free-text-label {
+            background: transparent !important;
+            border: none !important;
+        }
+        .free-text-label-inner {
+            white-space: nowrap;
+            font-weight: bold;
+            text-shadow:
+                -1px -1px 0 #fff, 1px -1px 0 #fff,
+                -1px 1px 0 #fff, 1px 1px 0 #fff,
+                0 0 4px rgba(255,255,255,0.8);
+            direction: rtl;
+        }
+
         /* תיקון מיקום בקרות Leaflet המובנות (כולל L.Control.Draw) - מוזז למטה כדי לא
            לחפוף עם שורת החיפוש שתופסת את הפינה השמאלית-עליונה */
         .leaflet-top.leaflet-left { top: 64px; }
@@ -333,6 +348,13 @@
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,17.25V21h3.75L17.81,9.94l-3.75,-3.75L3,17.25zM20.71,7.04c0.39,-0.39 0.39,-1.02 0,-1.41l-2.34,-2.34c-0.39,-0.39 -1.02,-0.39 -1.41,0l-1.83,1.83 3.75,3.75 1.83,-1.83z"/></svg>
         </button>
         <div class="toolbar-tooltip">מצב ציור - הוסף סימונים וצורות</div>
+    </div>
+
+    <div class="toolbar-item">
+        <button class="toolbar-btn" id="btnAddTextLabel">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5,4v3h5.5v12h3V7H19V4H5z"/></svg>
+        </button>
+        <div class="toolbar-tooltip">הוסף תווית טקסט על המפה</div>
     </div>
 
     <div class="toolbar-item">
@@ -497,6 +519,8 @@ function setUiMode(mode) {
         document.getElementById('mapHintText').textContent = 'הקש על ציור קיים לעריכה או מחיקה';
     } else if (mode === 'draw') {
         document.getElementById('mapHintText').textContent = 'בחר כלי ציור מהסרגל המורחב למעלה';
+    } else if (mode === 'text-label') {
+        document.getElementById('mapHintText').textContent = 'הקש על המפה למיקום התווית';
     }
 }
 
@@ -508,6 +532,11 @@ document.getElementById('btnModeSelect').addEventListener('click', function() {
 document.getElementById('btnModeDraw').addEventListener('click', function() {
     closeAllPopups();
     setUiMode('draw');
+});
+
+document.getElementById('btnAddTextLabel').addEventListener('click', function() {
+    closeAllPopups();
+    setUiMode('text-label');
 });
 
 document.getElementById('btnEditShapes').addEventListener('click', function() {
@@ -527,6 +556,9 @@ map.on('click', function(e) {
     } else if (currentMode === 'edit') {
         // הקשה על שטח ריק (לא על ציור קיים) במצב עריכה - רק סוגרת פופאפ עריכה פתוח, לא פועלת על המפה
         closeAllPopups();
+    } else if (currentMode === 'text-label') {
+        placeTextLabelAt(e.latlng);
+        setUiMode('select'); // פעולה חד-פעמית, כמו כלי ה-marker של L.Control.Draw - חוזרים לבחירה אחרי הצבה
     }
     // במצב draw, ה-L.Control.Draw הטבעי מטפל בהקשות בעצמו דרך ה-handlers הפנימיים שלו
 });
@@ -584,6 +616,34 @@ function escapeHtml(text) {
     var div = document.createElement('div');
     div.innerText = text;
     return div.innerHTML;
+}
+
+// ===== תוויות טקסט חופשיות על המפה - בלי פין/אייקון, רק טקסט מעוצב =====
+var DEFAULT_TEXT_LABEL_COLOR = '#262320';
+var DEFAULT_TEXT_LABEL_SIZE = 16;
+
+function makeTextLabelDivIcon(text, color, fontSize) {
+    return L.divIcon({
+        className: 'free-text-label',
+        html: '<div class="free-text-label-inner" style="color:' + color + ';font-size:' + fontSize + 'px;">' +
+              escapeHtml(text) + '</div>',
+        iconSize: null, // גודל אוטומטי לפי תוכן הטקסט, לא ריבוע קבוע
+        iconAnchor: [0, fontSize / 2]
+    });
+}
+
+function placeTextLabelAt(latlng) {
+    var text = window.prompt('טקסט התווית:', '') || '';
+    if (!text.trim()) return; // לא מציבים תווית ריקה
+
+    var icon = makeTextLabelDivIcon(text, DEFAULT_TEXT_LABEL_COLOR, DEFAULT_TEXT_LABEL_SIZE);
+    var layer = L.marker(latlng, { icon: icon });
+    layer.feature = { properties: {
+        kind: 'text', color: DEFAULT_TEXT_LABEL_COLOR, fontSize: DEFAULT_TEXT_LABEL_SIZE, text: text
+    }};
+    drawnItems.addLayer(layer);
+    attachEditHandler(layer);
+    persistShapes();
 }
 
 // ===== שכבת הציורים =====
@@ -785,11 +845,26 @@ function openEditPopupFor(layer, mapEvent) {
     popup.style.top = top + 'px';
 
     var isMarker = props.kind === 'marker';
-    document.getElementById('editColorPicker').value = isMarker ? (props.color || '#e74c3c') : (props.style.color || '#3498db');
-    document.getElementById('editOpacitySlider').value = isMarker ? 100 : Math.round((props.style.opacity || 1) * 100);
-    document.getElementById('editWeightSlider').value = isMarker ? (props.size || 26) : (props.style.weight || 3);
-    document.getElementById('editWeightLabel').textContent = isMarker ? 'גודל' : 'עובי קו';
-    document.getElementById('editOpacityVal').textContent = document.getElementById('editOpacitySlider').value + '%';
+    var isText = props.kind === 'text';
+    var opacityRow = document.getElementById('editOpacityRow');
+
+    if (isText) {
+        document.getElementById('editColorPicker').value = props.color || '#262320';
+        document.getElementById('editWeightSlider').min = 10;
+        document.getElementById('editWeightSlider').max = 40;
+        document.getElementById('editWeightSlider').value = props.fontSize || 16;
+        document.getElementById('editWeightLabel').textContent = 'גודל טקסט';
+        opacityRow.style.display = 'none';
+    } else {
+        document.getElementById('editColorPicker').value = isMarker ? (props.color || '#e74c3c') : (props.style.color || '#3498db');
+        document.getElementById('editWeightSlider').min = isMarker ? 16 : 1;
+        document.getElementById('editWeightSlider').max = isMarker ? 48 : 12;
+        document.getElementById('editWeightSlider').value = isMarker ? (props.size || 26) : (props.style.weight || 3);
+        document.getElementById('editWeightLabel').textContent = isMarker ? 'גודל' : 'עובי קו';
+        document.getElementById('editOpacitySlider').value = isMarker ? 100 : Math.round((props.style.opacity || 1) * 100);
+        document.getElementById('editOpacityVal').textContent = document.getElementById('editOpacitySlider').value + '%';
+        opacityRow.style.display = 'flex';
+    }
     document.getElementById('editWeightVal').textContent = document.getElementById('editWeightSlider').value;
 
     popup.classList.add('visible');
@@ -803,7 +878,7 @@ function buildEditPopupElement() {
     popup.innerHTML =
         '<div class="popup-title">עריכת ציור</div>' +
         '<div class="option-row"><label>צבע</label><input type="color" id="editColorPicker"/></div>' +
-        '<div class="option-row"><label>שקיפות</label><input type="range" id="editOpacitySlider" min="10" max="100"/><span class="val" id="editOpacityVal"></span></div>' +
+        '<div class="option-row" id="editOpacityRow"><label>שקיפות</label><input type="range" id="editOpacitySlider" min="10" max="100"/><span class="val" id="editOpacityVal"></span></div>' +
         '<div class="option-row"><label id="editWeightLabel">עובי</label><input type="range" id="editWeightSlider" min="1" max="48"/><span class="val" id="editWeightVal"></span></div>' +
         '<div class="popup-actions"><button class="btn-delete" id="editDeleteBtn">מחק</button><button class="btn-done" id="editCloseBtn">סגור</button></div>';
     document.body.appendChild(popup);
@@ -841,6 +916,11 @@ function applyEditChanges() {
         props.size = weightVal;
         var icon = makeMarkerDivIcon(props.size, props.color, props.iconKey, props.text);
         activeEditLayer.setIcon(icon);
+    } else if (props.kind === 'text') {
+        props.color = color;
+        props.fontSize = weightVal;
+        var textIcon = makeTextLabelDivIcon(props.text, props.color, props.fontSize);
+        activeEditLayer.setIcon(textIcon);
     } else {
         props.style.color = color;
         props.style.opacity = opacityPct / 100;
@@ -873,6 +953,13 @@ function persistShapes() {
             entry.size = props.size;
             entry.iconKey = props.iconKey;
             entry.text = props.text;
+        } else if (props.kind === 'text') {
+            var tl = layer.getLatLng();
+            entry.lat = tl.lat;
+            entry.lon = tl.lng;
+            entry.color = props.color;
+            entry.fontSize = props.fontSize;
+            entry.text = props.text;
         } else if (props.kind === 'circle') {
             var c = layer.getLatLng();
             entry.lat = c.lat;
@@ -900,6 +987,12 @@ function loadShapesFromJson(jsonStr) {
                 layer = L.marker([entry.lat, entry.lon], { icon: icon });
                 layer.feature = { properties: {
                     kind: 'marker', color: entry.color, size: entry.size, iconKey: entry.iconKey, text: entry.text
+                }};
+            } else if (entry.kind === 'text') {
+                var textIcon = makeTextLabelDivIcon(entry.text || '', entry.color || '#262320', entry.fontSize || 16);
+                layer = L.marker([entry.lat, entry.lon], { icon: textIcon });
+                layer.feature = { properties: {
+                    kind: 'text', color: entry.color, fontSize: entry.fontSize, text: entry.text
                 }};
             } else if (entry.kind === 'circle') {
                 layer = L.circle([entry.lat, entry.lon], buildLeafletStyleOptions(entry.style, true));
