@@ -196,10 +196,25 @@ class MainActivity : AppCompatActivity() {
         binding.mapFullscreenContainer.visibility = View.VISIBLE
     }
 
-    /** סוגר את חלון המפה ומחזיר למסך הראשי */
+    /**
+     * סוגר את חלון המפה ומחזיר למסך הראשי. לפני הסגירה בפועל, מסתיר זמנית (דרך JS)
+     * את כל פקדי הממשק (סרגל כלים, חיפוש, GPS, רמזים, וגם בקרות הזום הטבעיות של
+     * Leaflet) ומצלם snapshot "נקי" שמכיל רק את המפה והסימונים עליה - בדיוק כפי
+     * שהמשתמש ראה אותם ברגע הסגירה, בלי קשר לאיזה תפריט/מצב היה פתוח. הפעולה כולה
+     * חולפת ב-callback אחד (פחות מ-frame), כך שהמשתמש לא רואה את ה"ניקוי" החזותי.
+     */
     private fun closeFullscreenMap() {
-        isMapVisible = false
-        binding.mapFullscreenContainer.visibility = View.GONE
+        binding.mapWebView.evaluateJavascript("setCleanCaptureMode(true)") {
+            // השהיה של frame אחד (16ms) כדי להבטיח שהדפדפן סיים לצייר את מצב ה-UI הנקי
+            // לפני שלוכדים את ה-snapshot - בלי זה, יש סיכוי נמוך אך קיים שה-canvas יתפוס
+            // את הציור הישן (עם ה-UI) לפני שה-CSS visibility:hidden השתלם בפועל.
+            binding.mapWebView.postDelayed({
+                cachedSnapshotUri = captureMapSnapshot()
+                binding.mapWebView.evaluateJavascript("setCleanCaptureMode(false)", null)
+                isMapVisible = false
+                binding.mapFullscreenContainer.visibility = View.GONE
+            }, 16)
+        }
     }
 
     /**
@@ -574,11 +589,8 @@ class MainActivity : AppCompatActivity() {
         binding.mapWebView.evaluateJavascript(
             "centerOnCoordinates('${coords.lat}', '${coords.lon}')", null
         )
-
-        // מצלמים snapshot של המפה כעת, כשהיא גלויה ומורכזת בפועל על המסך - ושומרים אותו
-        // במטמון. כך, גם כשהמפה תיסגר כדי שהמשתמש יגיע לכפתורי השליחה, יהיה לנו תצלום
-        // תקף לשימוש בשליחה ב-WhatsApp.
-        binding.mapWebView.postDelayed({ cachedSnapshotUri = captureMapSnapshot() }, 600)
+        // ה-snapshot ל-WhatsApp נלכד אוטומטית ברגע הסגירה בפועל של חלון המפה
+        // (closeFullscreenMap), נקי מכל פקד ממשק - לא כאן.
     }
 
     private fun copyToClipboard() {
@@ -687,24 +699,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * שולח ב-WhatsApp את אותו טקסט בתור קאפשן, בצירוף תצלום (snapshot) של המפה כתמונה.
-     * אם המפה פתוחה כרגע על המסך - מצלמים תצלום טרי. אחרת משתמשים בתצלום שנשמר במטמון
-     * מהרגע שהמפה נפתחה ומורכזה אוטומטית בעת החישוב (ב-showResult). אם שני המקורות נכשלים,
-     * נשלח לפחות הטקסט בלבד כדי שהפעולה לא תיכשל כליל.
+     * שולח ב-WhatsApp את אותו טקסט בתור קאפשן, בצירוף תצלום (snapshot) "נקי" של המפה -
+     * רק המפה והסימונים עליה, בלי שום פקד ממשק (סרגל כלים, חיפוש, GPS, רמזים, בקרות זום).
+     * התצלום נלכד אוטומטית בכל סגירה של חלון המפה (closeFullscreenMap), בדיוק כפי שהמפה
+     * נראתה באותו רגע - לא כאן מחדש, כדי לא לסכן צילום שמכיל UI אם המפה עדיין פתוחה.
+     * אם הצילום נכשל מסיבה כלשהי - נשלח לפחות הטקסט בלבד, כדי שהפעולה לא תיכשל כליל.
      */
     private fun sendViaWhatsapp() {
         val coords = lastCoords ?: return
         val message = buildShareMessage(coords)
-        val snapshotUri = if (isMapVisible) captureMapSnapshot() else null
-        val finalSnapshotUri = snapshotUri ?: cachedSnapshotUri
         val activityContext = this
 
         val intent = Intent(Intent.ACTION_SEND).apply {
             setPackage("com.whatsapp")
             putExtra(Intent.EXTRA_TEXT, message)
-            if (finalSnapshotUri != null) {
+            if (cachedSnapshotUri != null) {
                 type = "image/png"
-                putExtra(Intent.EXTRA_STREAM, finalSnapshotUri)
+                putExtra(Intent.EXTRA_STREAM, cachedSnapshotUri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             } else {
                 type = "text/plain"

@@ -289,6 +289,21 @@
            לחפוף עם שורת החיפוש שתופסת את הפינה השמאלית-עליונה */
         .leaflet-top.leaflet-left { top: 64px; }
         .leaflet-control-attribution { font-size: 9px; }
+
+        /* ===== מצב "צילום נקי" - מוסיפים את clean-capture-mode לתוך body רגע לפני
+           לכידת snapshot, כדי שהתמונה שנשמרת תכיל רק את המפה והסימונים, בלי שום פקד
+           (סרגל כלים, חיפוש, GPS, רמזים, ואפילו כפתורי הזום הטבעיים של Leaflet). מוסר
+           מיד אחרי הצילום - המשתמש לא רואה את הפעולה בכלל, היא חולפת ב-frame אחד. ===== */
+        body.clean-capture-mode .map-close-btn,
+        body.clean-capture-mode .address-search-bar,
+        body.clean-capture-mode .toolbar-toggle-btn,
+        body.clean-capture-mode .map-toolbar,
+        body.clean-capture-mode .measure-readout,
+        body.clean-capture-mode .gps-controls,
+        body.clean-capture-mode .map-hint-text,
+        body.clean-capture-mode .leaflet-control-container {
+            visibility: hidden !important;
+        }
 /* [END: MapCSS] */
     </style>
 </head>
@@ -995,6 +1010,11 @@ document.getElementById('mapCloseBtn').addEventListener('click', function() {
 
 function showCloseButton() {
     document.getElementById('mapCloseBtn').classList.add('visible');
+}
+
+// ===== מצב צילום נקי - נקרא מ-Kotlin רגע לפני captureMapSnapshot() ורגע אחריו =====
+function setCleanCaptureMode(enabled) {
+    document.body.classList.toggle('clean-capture-mode', enabled);
 }
 
 setUiMode('select');
