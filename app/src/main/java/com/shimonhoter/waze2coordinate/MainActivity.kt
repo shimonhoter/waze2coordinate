@@ -7,12 +7,14 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
 import android.os.Looper
+import android.view.PixelCopy
 import android.view.View
+import android.graphics.Rect
 import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -201,18 +203,19 @@ class MainActivity : AppCompatActivity() {
      * את כל פקדי הממשק (סרגל כלים, חיפוש, GPS, רמזים, וגם בקרות הזום הטבעיות של
      * Leaflet) ומצלם snapshot "נקי" שמכיל רק את המפה והסימונים עליה - בדיוק כפי
      * שהמשתמש ראה אותם ברגע הסגירה, בלי קשר לאיזה תפריט/מצב היה פתוח. הפעולה כולה
-     * חולפת ב-callback אחד (פחות מ-frame), כך שהמשתמש לא רואה את ה"ניקוי" החזותי.
+     * חולפת באופן אסינכרוני (פחות מ-frame), כך שהמשתמש לא רואה את ה"ניקוי" החזותי.
      */
     private fun closeFullscreenMap() {
         binding.mapWebView.evaluateJavascript("setCleanCaptureMode(true)") {
             // השהיה של frame אחד (16ms) כדי להבטיח שהדפדפן סיים לצייר את מצב ה-UI הנקי
-            // לפני שלוכדים את ה-snapshot - בלי זה, יש סיכוי נמוך אך קיים שה-canvas יתפוס
-            // את הציור הישן (עם ה-UI) לפני שה-CSS visibility:hidden השתלם בפועל.
+            // לפני שלוכדים את ה-snapshot.
             binding.mapWebView.postDelayed({
-                cachedSnapshotUri = captureMapSnapshot()
-                binding.mapWebView.evaluateJavascript("setCleanCaptureMode(false)", null)
-                isMapVisible = false
-                binding.mapFullscreenContainer.visibility = View.GONE
+                captureMapSnapshot { uri ->
+                    cachedSnapshotUri = uri
+                    binding.mapWebView.evaluateJavascript("setCleanCaptureMode(false)", null)
+                    isMapVisible = false
+                    binding.mapFullscreenContainer.visibility = View.GONE
+                }
             }, 16)
         }
     }
@@ -652,26 +655,60 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * מצלם snapshot של ה-WebView שמציג את המפה, בדיוק כפי שהיא מוצגת על מסך המשתמש כרגע.
-     * שומר את התמונה כקובץ זמני בתיקיית ה-cache ומחזיר Uri דרך FileProvider שניתן לשתף
-     * עם אפליקציות אחרות (WhatsApp וכו'). מחזיר null אם המפה אינה פתוחה כרגע (ולכן אין
-     * ל-WebView מימדים בפועל) או אם הצילום נכשל מסיבה אחרת.
+     *
+     * משתמש ב-PixelCopy (זמין מ-API 24, תואם ל-minSdk של הפרויקט) ולא ב-webView.draw(canvas):
+     * Google מציינת במפורש שאסור לקרוא ל-draw() על WebView, כי הוא לא לוכד נכון שכבות
+     * שמורכבות בנפרד ע"י ה-GPU (hardware-composited layers) - וזה היה הגורם לכך שסימונים
+     * (markers) של Leaflet, שמוצבים ע"י Chromium באמצעות transform נפרד, נראו "קופצים"
+     * למיקום שגוי בתמונה שנשמרה, לעומת המיקום הנכון שהוצג בפועל במפה החיה.
+     * PixelCopy לעומת זאת קורא את ה-Surface האמיתי שמוצג על המסך (את ה-Window כולו),
+     * ולכן לוכד את כל השכבות המורכבות בדיוק כפי שהן נראות בפועל.
+     *
+     * PixelCopy הוא אסינכרוני (callback), אז גם הפונקציה הזו אסינכרונית.
      */
-    private fun captureMapSnapshot(): Uri? {
+    private fun captureMapSnapshot(onResult: (Uri?) -> Unit) {
         val webView = binding.mapWebView
-        if (webView.width == 0 || webView.height == 0) return null
+        if (webView.width == 0 || webView.height == 0) {
+            onResult(null)
+            return
+        }
 
-        return try {
+        val window = this.window
+        if (window == null) {
+            onResult(null)
+            return
+        }
+
+        try {
+            val location = IntArray(2)
+            webView.getLocationInWindow(location)
+            val rect = Rect(
+                location[0], location[1],
+                location[0] + webView.width, location[1] + webView.height
+            )
+
             val bitmap = Bitmap.createBitmap(webView.width, webView.height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            webView.draw(canvas)
 
+            PixelCopy.request(window, rect, bitmap, { copyResult ->
+                if (copyResult == PixelCopy.SUCCESS) {
+                    onResult(saveBitmapAndGetUri(bitmap))
+                } else {
+                    onResult(null)
+                }
+            }, Handler(Looper.getMainLooper()))
+        } catch (e: Exception) {
+            onResult(null)
+        }
+    }
+
+    private fun saveBitmapAndGetUri(bitmap: Bitmap): Uri? {
+        return try {
             val imagesDir = File(cacheDir, "images")
             if (!imagesDir.exists()) imagesDir.mkdirs()
             val file = File(imagesDir, "map_snapshot_${System.currentTimeMillis()}.png")
             FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
             }
-
             FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
         } catch (e: Exception) {
             null
