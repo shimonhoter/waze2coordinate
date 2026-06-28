@@ -188,6 +188,44 @@ class MainActivity : AppCompatActivity() {
         webView.settings.domStorageEnabled = true
         webView.addJavascriptInterface(MapJsBridge(), "AndroidBridge")
 
+        // WebChromeClient.onJsPrompt חיוני כאן: WebView הרגיל לא מטפל ב-window.prompt()
+        // של JavaScript מאליו (בניגוד לדפדפן רגיל) - בלי handler מפורש, הקריאה חוזרת
+        // באופן שקט עם null/ריק בלי שום UI נראה למשתמש. זה היה הגורם לכך שבחירת כלי
+        // הטקסט "לא עבדה" - ה-prompt() בתוך placeTextLabelAt() נכשל בשקט ומחזיר מצב
+        // בחירה מיד אחרי, בלי שהמשתמש קיבל הזדמנות להקליד טקסט בכלל.
+        webView.webChromeClient = object : android.webkit.WebChromeClient() {
+            override fun onJsPrompt(
+                view: android.webkit.WebView?,
+                url: String?,
+                message: String?,
+                defaultValue: String?,
+                result: android.webkit.JsPromptResult?
+            ): Boolean {
+                val input = android.widget.EditText(this@MainActivity)
+                input.setText(defaultValue.orEmpty())
+
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle(message.orEmpty())
+                    .setView(input)
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        result?.confirm(input.text.toString())
+                    }
+                    .setNegativeButton(android.R.string.cancel) { _, _ ->
+                        result?.cancel()
+                    }
+                    .setCancelable(false)
+                    .setOnCancelListener {
+                        // רשת ביטחון: אם הדיאלוג נסגר בכל זאת בלי אחד מהכפתורים (לדוגמה
+                        // כפתור חזרה של המכשיר) - חובה לקרוא ל-cancel(), אחרת ה-JS thread
+                        // נשאר תקוע לנצח מחכה לתשובה שלא תגיע
+                        result?.cancel()
+                    }
+                    .show()
+
+                return true
+            }
+        }
+
         // טוען את הציורים השמורים מהדיסק לתוך המפה ברגע שהדף סיים להיטען, ומאתחל
         // אותה למצב "מוטמעת" (ללא סרגל כלים/חיפוש/GPS - רק מפה נקייה עם סמן בחירה).
         webView.webViewClient = object : android.webkit.WebViewClient() {
