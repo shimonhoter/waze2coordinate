@@ -734,6 +734,7 @@ class MainActivity : AppCompatActivity() {
         val message = buildShareMessage(coords)
         val snapshotUri = if (isMapVisible) captureMapSnapshot() else null
         val finalSnapshotUri = snapshotUri ?: cachedSnapshotUri
+        val activityContext = this
 
         val intent = Intent(Intent.ACTION_SEND).apply {
             setPackage("com.whatsapp")
@@ -744,7 +745,7 @@ class MainActivity : AppCompatActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             } else {
                 type = "text/plain"
-                Toast.makeText(this, getString(R.string.error_snapshot_failed), Toast.LENGTH_SHORT).show()
+                Toast.makeText(activityContext, getString(R.string.error_snapshot_failed), Toast.LENGTH_SHORT).show()
             }
         }
 
