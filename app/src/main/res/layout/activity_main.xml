@@ -215,6 +215,58 @@
                         app:cornerRadius="8dp"
                         app:backgroundTint="#33ccff" />
 
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:hint="@string/hint_description"
+                        app:boxCornerRadiusTopStart="8dp"
+                        app:boxCornerRadiusTopEnd="8dp"
+                        app:boxCornerRadiusBottomStart="8dp"
+                        app:boxCornerRadiusBottomEnd="8dp">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/editDescription"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textCapSentences" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="8dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSendSms"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="4dp"
+                            android:text="@string/btn_send_sms"
+                            android:textSize="13sp"
+                            app:cornerRadius="8dp"
+                            app:icon="@drawable/ic_sms"
+                            app:iconGravity="textStart"
+                            app:backgroundTint="#607d8b" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnSendWhatsapp"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_weight="1"
+                            android:layout_marginStart="4dp"
+                            android:text="@string/btn_send_whatsapp"
+                            android:textSize="13sp"
+                            app:cornerRadius="8dp"
+                            app:icon="@drawable/ic_whatsapp"
+                            app:iconGravity="textStart"
+                            app:backgroundTint="#25D366" />
+
+                    </LinearLayout>
+
                 </LinearLayout>
 
             </LinearLayout>
@@ -238,71 +290,158 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- סרגל עליון: סגירת מפה + טוגל סגנון -->
+        <!-- סרגל עליון: סגירה, חיפוש כתובת, טוגל סגנון מפה -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="top"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
+            android:orientation="vertical"
             android:background="#e6ffffff"
             android:padding="8dp"
             android:layoutDirection="rtl">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnCloseMap"
-                style="?attr/materialIconButtonOutlinedStyle"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                app:icon="@drawable/ic_close"
-                app:iconTint="#2c3e50" />
-
-            <com.google.android.material.button.MaterialButtonToggleGroup
-                android:id="@+id/mapStyleToggle"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                app:singleSelection="true"
-                app:selectionRequired="true">
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="6dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCloseMap"
+                    style="?attr/materialIconButtonOutlinedStyle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    app:icon="@drawable/ic_close"
+                    app:iconTint="#2c3e50" />
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editAddressSearch"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:background="@android:color/white"
+                    android:hint="@string/hint_address_search"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:imeOptions="actionSearch"
+                    android:singleLine="true"
+                    android:textSize="14sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAddressSearch"
+                    style="?attr/materialIconButtonOutlinedStyle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="4dp"
+                    app:icon="@drawable/ic_search"
+                    app:iconTint="#2c3e50" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/mapModeToggle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    app:singleSelection="true"
+                    app:selectionRequired="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnModeSelect"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:textSize="11sp"
+                        android:text="@string/mode_select"
+                        app:cornerRadius="8dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnModeDraw"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:textSize="11sp"
+                        android:text="@string/mode_draw"
+                        app:cornerRadius="8dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnModeEdit"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="38dp"
+                        android:layout_weight="1"
+                        android:textSize="11sp"
+                        android:text="@string/mode_edit"
+                        app:cornerRadius="8dp" />
+
+                </com.google.android.material.button.MaterialButtonToggleGroup>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnMapStreet"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_weight="1"
-                    android:textSize="12sp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="6dp"
+                    android:textSize="11sp"
                     android:text="@string/map_style_street"
                     app:cornerRadius="8dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnMapSatellite"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_weight="1"
-                    android:textSize="12sp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="4dp"
+                    android:textSize="11sp"
                     android:text="@string/map_style_satellite"
                     app:cornerRadius="8dp" />
 
-            </com.google.android.material.button.MaterialButtonToggleGroup>
+            </LinearLayout>
 
         </LinearLayout>
 
-        <!-- כפתור מירכוז GPS - פינה תחתונה -->
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/btnCenterGps"
+        <!-- כפתורי GPS - פינה תחתונה: מירכוז חד-פעמי + טוגל מעקב רציף -->
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
             android:layout_margin="20dp"
-            app:srcCompat="@drawable/ic_gps"
-            app:backgroundTint="#ffffff"
-            app:tint="#3498db" />
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/btnToggleGpsFollow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                app:srcCompat="@drawable/ic_gps_follow"
+                app:backgroundTint="#ffffff"
+                app:tint="#95a5a6"
+                app:fabSize="mini" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/btnCenterGps"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:srcCompat="@drawable/ic_gps"
+                app:backgroundTint="#ffffff"
+                app:tint="#3498db" />
+
+        </LinearLayout>
 
         <!-- רמז שימוש תחתון -->
         <TextView
+            android:id="@+id/mapHintText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"

@@ -49,6 +49,19 @@
             </intent-filter>
 
         </activity>
+
+        <!-- FileProvider - נדרש לשיתוף תמונת snapshot של המפה עם אפליקציות חוץ (WhatsApp וכו'),
+             כי מ-Android 10 ואילך לא ניתן לשתף קבצים ישירות עם file:// URI בין אפליקציות -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>

@@ -6,38 +6,165 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         html, body, #map { height: 100%; margin: 0; padding: 0; }
+
+        #stylePanel {
+            position: absolute;
+            bottom: 70px;
+            left: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.97);
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            padding: 12px;
+            display: none;
+            z-index: 1000;
+            font-family: system-ui, sans-serif;
+            direction: rtl;
+        }
+        #stylePanel.visible { display: block; }
+        #stylePanel .row { display: flex; align-items: center; margin-bottom: 8px; }
+        #stylePanel .row label { width: 70px; font-size: 13px; color: #2c3e50; }
+        #stylePanel .row input[type=range] { flex: 1; margin: 0 8px; }
+        #stylePanel .row input[type=color] { width: 36px; height: 28px; border: none; padding: 0; }
+        #stylePanel .row span { width: 32px; font-size: 12px; text-align: center; color: #555; }
+        #stylePanel .actions { display: flex; gap: 8px; margin-top: 4px; }
+        #stylePanel button { flex: 1; padding: 8px; border: none; border-radius: 6px; font-size: 13px; font-weight: bold; }
+        #stylePanel .btn-done { background: #3498db; color: white; }
+        #stylePanel .btn-delete { background: #e74c3c; color: white; }
+
+        #drawToolMenu {
+            position: absolute;
+            background: rgba(255,255,255,0.97);
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 1001;
+            overflow: hidden;
+            direction: rtl;
+        }
+        #drawToolMenu.visible { display: block; }
+        #drawToolMenu button {
+            display: block; width: 100%; padding: 10px 16px; border: none; background: white;
+            font-size: 14px; text-align: right; border-bottom: 1px solid #eee;
+        }
+        #drawToolMenu button:last-child { border-bottom: none; }
+        #drawToolMenu button:active { background: #f0f0f0; }
+
+        #finishDrawBtn {
+            position: absolute;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            padding: 12px 28px;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 1000;
+        }
+        #finishDrawBtn.visible { display: block; }
+
+        #textInputBox {
+            position: absolute;
+            top: 60px;
+            left: 10px;
+            right: 10px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            padding: 10px;
+            display: none;
+            z-index: 1001;
+            direction: rtl;
+        }
+        #textInputBox.visible { display: block; }
+        #textInputBox input {
+            width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 6px;
+            font-size: 14px; margin-bottom: 8px;
+        }
+        #textInputBox button {
+            width: 100%; padding: 8px; background: #3498db; color: white; border: none;
+            border-radius: 6px; font-weight: bold;
+        }
+
+        .pin-label {
+            position: absolute;
+            top: 22px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.95);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            direction: rtl;
+        }
     </style>
 </head>
 <body>
 <div id="map"></div>
 
+<div id="drawToolMenu">
+    <button onclick="selectDrawTool('pin')">📍 פין + טקסט</button>
+    <button onclick="selectDrawTool('line')">📏 קו</button>
+    <button onclick="selectDrawTool('polygon')">⬠ פוליגון</button>
+    <button onclick="selectDrawTool('circle')">⭕ עיגול</button>
+</div>
+
+<div id="textInputBox">
+    <input type="text" id="textInputField" placeholder="טקסט לתווית..." />
+    <button onclick="confirmTextInput()">אישור</button>
+</div>
+
+<button id="finishDrawBtn" onclick="finishCurrentDrawing()">סיום ציור</button>
+
+<div id="stylePanel">
+    <div class="row">
+        <label>צבע</label>
+        <input type="color" id="styleColor" value="#e74c3c" oninput="onStyleChange()" />
+    </div>
+    <div class="row">
+        <label>שקיפות</label>
+        <input type="range" id="styleOpacity" min="0" max="100" value="80" oninput="onStyleChange()" />
+        <span id="styleOpacityVal">80%</span>
+    </div>
+    <div class="row">
+        <label>עובי קו</label>
+        <input type="range" id="styleWeight" min="1" max="12" value="3" oninput="onStyleChange()" />
+        <span id="styleWeightVal">3</span>
+    </div>
+    <div class="actions">
+        <button class="btn-delete" onclick="deleteSelectedShape()">מחק</button>
+        <button class="btn-done" onclick="closeStylePanel()">סגור</button>
+    </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    // נקודת התחלה: ישראל, מרכז הארץ (זום רחוק מספיק לראות את כל המדינה)
     var DEFAULT_LAT = 31.7683;
     var DEFAULT_LON = 35.2137;
     var DEFAULT_ZOOM = 8;
 
     var map = L.map('map', { zoomControl: true }).setView([DEFAULT_LAT, DEFAULT_LON], DEFAULT_ZOOM);
 
-    // שתי שכבות מפה - רחובות (OpenStreetMap) ולוויין (Esri World Imagery)
     var streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',
         maxZoom: 19
     });
-
     var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri',
         maxZoom: 19
     });
-
     streetLayer.addTo(map);
     var currentLayer = streetLayer;
 
     var marker = null;
     var gpsMarker = null;
-
-    // אייקון כחול ייעודי לסמן ה-GPS, כדי להבדיל אותו מהפין הרגיל (אדום) של נקודה נבחרת
     var gpsIcon = L.divIcon({
         className: 'gps-marker',
         html: '<div style="width:16px;height:16px;border-radius:50%;background:#4285F4;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
@@ -53,26 +180,12 @@
         }
     }
 
-    // הקשה על המפה - מציבה פין ומדווחת ל-Android (Kotlin) על הקואורדינטות שנבחרו
-    map.on('click', function(e) {
-        var lat = e.latlng.lat.toFixed(6);
-        var lon = e.latlng.lng.toFixed(6);
-        setMarker(lat, lon);
-        if (window.AndroidBridge) {
-            window.AndroidBridge.onMapPointSelected(lat.toString(), lon.toString());
-        }
-    });
-
-    // קריאות שמתבצעות מ-Kotlin אל הדף:
-
-    // החלפת שכבת המפה (רחובות / לוויין)
     function switchMapStyle(style) {
         map.removeLayer(currentLayer);
         currentLayer = (style === 'satellite') ? satelliteLayer : streetLayer;
         currentLayer.addTo(map);
     }
 
-    // מירכוז המפה והצבת פין על קואורדינטות נתונות (למשל קואורדינטות שהתקבלו מקישור)
     function centerOnCoordinates(lat, lon) {
         var latNum = parseFloat(lat);
         var lonNum = parseFloat(lon);
@@ -80,9 +193,6 @@
         setMarker(latNum, lonNum);
     }
 
-    // מירכוז המפה למיקום ה-GPS הנוכחי של המכשיר (מתקבל מ-Kotlin אחרי קריאה ל-LocationManager).
-    // לא מציב את הפין "הנבחר" הרגיל - רק נקודה כחולה נפרדת שמסמנת "אני נמצא כאן",
-    // כך שלא נדרס מיקום שכבר נבחר בטעות.
     function centerOnGps(lat, lon) {
         var latNum = parseFloat(lat);
         var lonNum = parseFloat(lon);
@@ -92,6 +202,351 @@
         } else {
             gpsMarker = L.marker([latNum, lonNum], { icon: gpsIcon, interactive: false }).addTo(map);
         }
+    }
+
+    var mapMode = 'select';
+
+    function setMapMode(mode) {
+        mapMode = mode;
+        cancelCurrentDrawing();
+        closeStylePanel();
+        hideDrawToolMenu();
+    }
+
+    var drawnItems = L.layerGroup().addTo(map);
+    var shapesById = {};
+    var nextShapeId = 1;
+
+    function defaultStyle() {
+        return {
+            color: document.getElementById('styleColor').value,
+            opacity: parseInt(document.getElementById('styleOpacity').value) / 100,
+            weight: parseInt(document.getElementById('styleWeight').value)
+        };
+    }
+
+    function applyStyleToLayer(layer, type, style) {
+        if (type === 'pin') {
+            if (layer.getElement) {
+                var el = layer.getElement();
+                if (el) {
+                    var inner = el.querySelector('.pin-dot');
+                    if (inner) inner.style.background = style.color;
+                }
+            }
+        } else {
+            layer.setStyle({
+                color: style.color,
+                fillColor: style.color,
+                opacity: style.opacity,
+                fillOpacity: style.opacity * 0.5,
+                weight: style.weight
+            });
+        }
+    }
+
+    function makePinIcon(text, color) {
+        var label = text ? '<div class="pin-label">' + escapeHtml(text) + '</div>' : '';
+        return L.divIcon({
+            className: 'custom-pin',
+            html: '<div class="pin-dot" style="width:20px;height:20px;border-radius:50%;background:' + color +
+                  ';border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>' + label,
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        });
+    }
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.innerText = text;
+        return div.innerHTML;
+    }
+
+    function addPinShape(lat, lon, text, style, id) {
+        var shapeId = id || nextShapeId++;
+        var layer = L.marker([lat, lon], { icon: makePinIcon(text, style.color) }).addTo(drawnItems);
+        registerShape(shapeId, layer, 'pin', style, text, [[lat, lon]]);
+        return shapeId;
+    }
+
+    function addLineShape(points, style, id) {
+        var shapeId = id || nextShapeId++;
+        var layer = L.polyline(points, {
+            color: style.color, opacity: style.opacity, weight: style.weight
+        }).addTo(drawnItems);
+        registerShape(shapeId, layer, 'line', style, null, points);
+        return shapeId;
+    }
+
+    function addPolygonShape(points, style, id) {
+        var shapeId = id || nextShapeId++;
+        var layer = L.polygon(points, {
+            color: style.color, fillColor: style.color,
+            opacity: style.opacity, fillOpacity: style.opacity * 0.5, weight: style.weight
+        }).addTo(drawnItems);
+        registerShape(shapeId, layer, 'polygon', style, null, points);
+        return shapeId;
+    }
+
+    function addCircleShape(centerLatLng, radiusMeters, style, id) {
+        var shapeId = id || nextShapeId++;
+        var layer = L.circle(centerLatLng, {
+            radius: radiusMeters,
+            color: style.color, fillColor: style.color,
+            opacity: style.opacity, fillOpacity: style.opacity * 0.5, weight: style.weight
+        }).addTo(drawnItems);
+        registerShape(shapeId, layer, 'circle', style, null, [centerLatLng], radiusMeters);
+        return shapeId;
+    }
+
+    function registerShape(id, layer, type, style, text, points, radius) {
+        shapesById[id] = { layer: layer, type: type, style: style, text: text, points: points, radius: radius };
+        layer.on('click', function(e) {
+            if (mapMode === 'edit') {
+                L.DomEvent.stopPropagation(e);
+                openStylePanelFor(id);
+            }
+        });
+        notifyShapesChanged();
+    }
+
+    function deleteShape(id) {
+        var entry = shapesById[id];
+        if (!entry) return;
+        drawnItems.removeLayer(entry.layer);
+        delete shapesById[id];
+        notifyShapesChanged();
+    }
+
+    var pendingDrawType = null;
+    var pendingPoints = [];
+    var pendingTempLayer = null;
+    var pendingPinLatLng = null;
+    var pendingClickLatLng = null;
+
+    map.on('click', function(e) {
+        if (mapMode === 'select') {
+            var lat = e.latlng.lat.toFixed(6);
+            var lon = e.latlng.lng.toFixed(6);
+            setMarker(lat, lon);
+            if (window.AndroidBridge) {
+                window.AndroidBridge.onMapPointSelected(lat.toString(), lon.toString());
+            }
+        } else if (mapMode === 'draw') {
+            if (pendingDrawType === null) {
+                showDrawToolMenu(e.containerPoint, e.latlng);
+            } else {
+                handleDrawTap(e.latlng);
+            }
+        } else if (mapMode === 'edit') {
+            closeStylePanel();
+        }
+    });
+
+    function showDrawToolMenu(containerPoint, latlng) {
+        pendingClickLatLng = latlng;
+        var menu = document.getElementById('drawToolMenu');
+        menu.style.left = Math.min(containerPoint.x, map.getSize().x - 180) + 'px';
+        menu.style.top = Math.min(containerPoint.y, map.getSize().y - 200) + 'px';
+        menu.classList.add('visible');
+    }
+
+    function hideDrawToolMenu() {
+        document.getElementById('drawToolMenu').classList.remove('visible');
+    }
+
+    function selectDrawTool(type) {
+        hideDrawToolMenu();
+        pendingDrawType = type;
+        pendingPoints = [];
+
+        if (type === 'pin') {
+            pendingPinLatLng = pendingClickLatLng;
+            showTextInput();
+        } else if (type === 'circle') {
+            pendingPoints.push(pendingClickLatLng);
+        } else {
+            pendingPoints.push(pendingClickLatLng);
+            startTempLine();
+            document.getElementById('finishDrawBtn').classList.add('visible');
+        }
+    }
+
+    function handleDrawTap(latlng) {
+        if (pendingDrawType === 'circle') {
+            if (pendingPoints.length === 1) {
+                var center = pendingPoints[0];
+                var radius = center.distanceTo(latlng);
+                var style = defaultStyle();
+                addCircleShape(center, radius, style);
+                cancelCurrentDrawing();
+            }
+        } else if (pendingDrawType === 'line' || pendingDrawType === 'polygon') {
+            pendingPoints.push(latlng);
+            updateTempLine();
+        }
+    }
+
+    function startTempLine() {
+        pendingTempLayer = L.polyline(pendingPoints, { color: '#888', dashArray: '6,6', weight: 2 }).addTo(map);
+    }
+
+    function updateTempLine() {
+        if (pendingTempLayer) {
+            pendingTempLayer.setLatLngs(pendingPoints);
+        }
+    }
+
+    function finishCurrentDrawing() {
+        var style = defaultStyle();
+        if (pendingDrawType === 'line' && pendingPoints.length >= 2) {
+            addLineShape(pendingPoints.slice(), style);
+        } else if (pendingDrawType === 'polygon' && pendingPoints.length >= 3) {
+            addPolygonShape(pendingPoints.slice(), style);
+        }
+        cancelCurrentDrawing();
+    }
+
+    function cancelCurrentDrawing() {
+        pendingDrawType = null;
+        pendingPoints = [];
+        pendingPinLatLng = null;
+        if (pendingTempLayer) {
+            map.removeLayer(pendingTempLayer);
+            pendingTempLayer = null;
+        }
+        document.getElementById('finishDrawBtn').classList.remove('visible');
+        hideTextInput();
+    }
+
+    function showTextInput() {
+        document.getElementById('textInputField').value = '';
+        document.getElementById('textInputBox').classList.add('visible');
+    }
+
+    function hideTextInput() {
+        document.getElementById('textInputBox').classList.remove('visible');
+    }
+
+    function confirmTextInput() {
+        var text = document.getElementById('textInputField').value.trim();
+        if (pendingPinLatLng) {
+            var style = defaultStyle();
+            addPinShape(pendingPinLatLng.lat, pendingPinLatLng.lng, text, style);
+        }
+        cancelCurrentDrawing();
+    }
+
+    var selectedShapeId = null;
+
+    function openStylePanelFor(id) {
+        selectedShapeId = id;
+        var entry = shapesById[id];
+        if (!entry) return;
+
+        document.getElementById('styleColor').value = entry.style.color;
+        document.getElementById('styleOpacity').value = Math.round(entry.style.opacity * 100);
+        document.getElementById('styleOpacityVal').innerText = Math.round(entry.style.opacity * 100) + '%';
+        document.getElementById('styleWeight').value = entry.style.weight;
+        document.getElementById('styleWeightVal').innerText = entry.style.weight;
+
+        document.getElementById('stylePanel').classList.add('visible');
+    }
+
+    function onStyleChange() {
+        var opacityVal = document.getElementById('styleOpacity').value;
+        var weightVal = document.getElementById('styleWeight').value;
+        document.getElementById('styleOpacityVal').innerText = opacityVal + '%';
+        document.getElementById('styleWeightVal').innerText = weightVal;
+
+        if (selectedShapeId !== null) {
+            var entry = shapesById[selectedShapeId];
+            if (entry) {
+                entry.style = defaultStyle();
+                applyStyleToLayer(entry.layer, entry.type, entry.style);
+                notifyShapesChanged();
+            }
+        }
+    }
+
+    function deleteSelectedShape() {
+        if (selectedShapeId !== null) {
+            deleteShape(selectedShapeId);
+            closeStylePanel();
+        }
+    }
+
+    function closeStylePanel() {
+        selectedShapeId = null;
+        document.getElementById('stylePanel').classList.remove('visible');
+    }
+
+    function exportShapesAsJson() {
+        var result = [];
+        for (var id in shapesById) {
+            var entry = shapesById[id];
+            result.push({
+                type: entry.type,
+                style: entry.style,
+                text: entry.text,
+                points: entry.points.map(function(p) {
+                    return (p.lat !== undefined) ? [p.lat, p.lng] : p;
+                }),
+                radius: entry.radius
+            });
+        }
+        return JSON.stringify(result);
+    }
+
+    function notifyShapesChanged() {
+        if (window.AndroidBridge && window.AndroidBridge.onShapesChanged) {
+            window.AndroidBridge.onShapesChanged(exportShapesAsJson());
+        }
+    }
+
+    function loadShapesFromJson(jsonStr) {
+        try {
+            var shapes = JSON.parse(jsonStr);
+            shapes.forEach(function(s) {
+                if (s.type === 'pin') {
+                    addPinShape(s.points[0][0], s.points[0][1], s.text, s.style);
+                } else if (s.type === 'line') {
+                    addLineShape(s.points, s.style);
+                } else if (s.type === 'polygon') {
+                    addPolygonShape(s.points, s.style);
+                } else if (s.type === 'circle') {
+                    addCircleShape(s.points[0], s.radius, s.style);
+                }
+            });
+        } catch (e) {
+            console.error('Failed to load shapes', e);
+        }
+    }
+
+    function searchAddress(query) {
+        var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query);
+        fetch(url, { headers: { 'Accept-Language': 'he' } })
+            .then(function(resp) { return resp.json(); })
+            .then(function(results) {
+                if (results && results.length > 0) {
+                    var lat = parseFloat(results[0].lat);
+                    var lon = parseFloat(results[0].lon);
+                    map.setView([lat, lon], 16);
+                    setMarker(lat, lon);
+                    if (window.AndroidBridge && window.AndroidBridge.onAddressSearchResult) {
+                        window.AndroidBridge.onAddressSearchResult(true, lat.toFixed(6), lon.toFixed(6), results[0].display_name || '');
+                    }
+                } else {
+                    if (window.AndroidBridge && window.AndroidBridge.onAddressSearchResult) {
+                        window.AndroidBridge.onAddressSearchResult(false, '', '', '');
+                    }
+                }
+            })
+            .catch(function() {
+                if (window.AndroidBridge && window.AndroidBridge.onAddressSearchResult) {
+                    window.AndroidBridge.onAddressSearchResult(false, '', '', '');
+                }
+            });
     }
 </script>
 </body>

@@ -12,6 +12,8 @@
     <string name="map_style_street">רחובות</string>
     <string name="map_style_satellite">לוויין</string>
     <string name="map_tap_hint">הקש על המפה לבחירת מיקום</string>
+    <string name="map_tap_hint_draw">הקש על המפה לבחירת כלי ציור</string>
+    <string name="map_tap_hint_edit">הקש על ציור קיים לעריכה או מחיקה</string>
     <string name="error_location_unavailable">לא ניתן לאתר את המיקום הנוכחי. ודא ש-GPS מופעל.</string>
     <string name="error_location_permission_denied">נדרשת הרשאת מיקום כדי למרכז את המפה למיקומך</string>
     <string name="label_lat">קו רוחב (Lat)</string>
@@ -23,4 +25,22 @@
     <string name="copied">הועתק ללוח</string>
     <string name="error_no_waze_app">לא נמצאה אפליקציית Waze</string>
     <string name="error_no_maps_app">לא נמצאה אפליקציית מפות</string>
+    <string name="hint_description">תיאור הנקודה (אופציונלי)</string>
+    <string name="btn_send_sms">שלח SMS</string>
+    <string name="btn_send_whatsapp">שלח ב-WhatsApp</string>
+    <string name="error_no_sms_app">לא נמצאה אפליקציית הודעות</string>
+    <string name="error_no_whatsapp_app">לא נמצאה אפליקציית WhatsApp</string>
+    <string name="error_snapshot_failed">לא ניתן היה ללכוד תצלום של המפה</string>
+    <string name="msg_point_label">נקודה</string>
+    <string name="msg_coords_label">קואורדינטות</string>
+    <string name="msg_maps_label">צפייה במפה</string>
+    <string name="msg_waze_label">ניווט עם Waze</string>
+    <string name="mode_select">בחירה</string>
+    <string name="mode_draw">ציור</string>
+    <string name="mode_edit">עריכה/מחיקה</string>
+    <string name="hint_address_search">חפש כתובת...</string>
+    <string name="error_address_not_found">לא נמצאה כתובת מתאימה</string>
+    <string name="error_address_search_failed">החיפוש נכשל. ודא שהאינטרנט מחובר ונסה שוב.</string>
+    <string name="gps_follow_on">מעקב GPS פעיל</string>
+    <string name="gps_follow_off">מעקב GPS כבוי</string>
 </resources>

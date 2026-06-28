@@ -6,6 +6,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
@@ -16,6 +18,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.shimonhoter.waze2coordinate.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +26,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
@@ -49,8 +55,14 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            centerMapOnGps()
+            if (pendingGpsFollowAfterPermission) {
+                pendingGpsFollowAfterPermission = false
+                startGpsFollow()
+            } else {
+                centerMapOnGps()
+            }
         } else {
+            pendingGpsFollowAfterPermission = false
             Toast.makeText(this, getString(R.string.error_location_permission_denied), Toast.LENGTH_SHORT).show()
         }
     }
@@ -76,12 +88,31 @@ class MainActivity : AppCompatActivity() {
         binding.btnPickOnMap.setOnClickListener { openFullscreenMap() }
         binding.btnCloseMap.setOnClickListener { closeFullscreenMap() }
         binding.btnCenterGps.setOnClickListener { requestLocationAndCenter() }
+        binding.btnToggleGpsFollow.setOnClickListener { toggleGpsFollow() }
 
-        binding.mapStyleToggle.check(binding.btnMapStreet.id)
-        binding.mapStyleToggle.addOnButtonCheckedListener { _, checkedId, isChecked ->
+        binding.mapModeToggle.check(binding.btnModeSelect.id)
+        binding.mapModeToggle.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (isChecked) {
-                val style = if (checkedId == binding.btnMapSatellite.id) "satellite" else "street"
-                binding.mapWebView.evaluateJavascript("switchMapStyle('$style')", null)
+                val mode = when (checkedId) {
+                    binding.btnModeDraw.id -> "draw"
+                    binding.btnModeEdit.id -> "edit"
+                    else -> "select"
+                }
+                binding.mapWebView.evaluateJavascript("setMapMode('$mode')", null)
+                updateMapHintForMode(mode)
+            }
+        }
+
+        binding.btnMapStreet.setOnClickListener { switchMapTileStyle("street") }
+        binding.btnMapSatellite.setOnClickListener { switchMapTileStyle("satellite") }
+
+        binding.btnAddressSearch.setOnClickListener { performAddressSearch() }
+        binding.editAddressSearch.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                performAddressSearch()
+                true
+            } else {
+                false
             }
         }
 
@@ -89,19 +120,63 @@ class MainActivity : AppCompatActivity() {
         binding.btnCopy.setOnClickListener { copyToClipboard() }
         binding.btnOpenMaps.setOnClickListener { openInGoogleMaps() }
         binding.btnNavigateWaze.setOnClickListener { navigateWithWaze() }
+        binding.btnSendSms.setOnClickListener { sendViaSms() }
+        binding.btnSendWhatsapp.setOnClickListener { sendViaWhatsapp() }
 
         handleIncomingIntent(intent)
     }
 
+    private fun switchMapTileStyle(style: String) {
+        binding.mapWebView.evaluateJavascript("switchMapStyle('$style')", null)
+        val selectedColor = android.graphics.Color.parseColor("#3498db")
+        val unselectedColor = android.graphics.Color.parseColor("#cbd5e1")
+        binding.btnMapStreet.setTextColor(if (style == "street") selectedColor else unselectedColor)
+        binding.btnMapSatellite.setTextColor(if (style == "satellite") selectedColor else unselectedColor)
+    }
+
+    private fun updateMapHintForMode(mode: String) {
+        binding.mapHintText.text = when (mode) {
+            "draw" -> getString(R.string.map_tap_hint_draw)
+            "edit" -> getString(R.string.map_tap_hint_edit)
+            else -> getString(R.string.map_tap_hint)
+        }
+    }
+
+    private fun performAddressSearch() {
+        val query = binding.editAddressSearch.text?.toString()?.trim()
+        if (query.isNullOrBlank()) return
+        binding.mapWebView.evaluateJavascript("searchAddress(${JSONObject.quote(query)})", null)
+    }
+
     /**
-     * Bridge בין דף ה-Leaflet שרץ ב-WebView לקוד Kotlin. בכל הקשה על המפה,
-     * הדף קורא ל-onMapPointSelected עם הקואורדינטות הנבחרות.
+     * Bridge בין דף ה-Leaflet שרץ ב-WebView לקוד Kotlin. מטפל בהקשות לבחירת נקודה,
+     * שינויים בציורים (לשמירה אוטומטית), ותוצאות חיפוש כתובת.
      */
     inner class MapJsBridge {
         @JavascriptInterface
         fun onMapPointSelected(lat: String, lon: String) {
             runOnUiThread {
                 onMapTapped(lat, lon)
+            }
+        }
+
+        @JavascriptInterface
+        fun onShapesChanged(shapesJson: String) {
+            runOnUiThread {
+                saveShapesToDisk(shapesJson)
+            }
+        }
+
+        @JavascriptInterface
+        fun onAddressSearchResult(found: Boolean, lat: String, lon: String, displayName: String) {
+            runOnUiThread {
+                if (found) {
+                    binding.editAddressSearch.clearFocus()
+                    val inputManager = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                    inputManager.hideSoftInputFromWindow(binding.editAddressSearch.windowToken, 0)
+                } else {
+                    Toast.makeText(this@MainActivity, getString(R.string.error_address_not_found), Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -111,7 +186,39 @@ class MainActivity : AppCompatActivity() {
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.addJavascriptInterface(MapJsBridge(), "AndroidBridge")
+
+        // טוען את הציורים השמורים מהדיסק לתוך המפה ברגע שהדף סיים להיטען
+        webView.webViewClient = object : android.webkit.WebViewClient() {
+            override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                val savedJson = loadShapesFromDisk()
+                if (savedJson != null) {
+                    webView.evaluateJavascript("loadShapesFromJson(${JSONObject.quote(savedJson)})", null)
+                }
+            }
+        }
+
         webView.loadUrl("file:///android_asset/map.html")
+    }
+
+    /** קובץ שמירת הציורים על הדיסק - נשמר ב-filesDir כך שהוא פרטי לאפליקציה ולא נמחק עם cache */
+    private val shapesFile: File
+        get() = File(filesDir, "saved_shapes.json")
+
+    private fun saveShapesToDisk(shapesJson: String) {
+        try {
+            shapesFile.writeText(shapesJson)
+        } catch (e: Exception) {
+            // כשל בשמירה לא אמור לקרוס את האפליקציה - הציור נשאר תקף בזיכרון להמשך הסשן
+        }
+    }
+
+    private fun loadShapesFromDisk(): String? {
+        return try {
+            if (shapesFile.exists()) shapesFile.readText() else null
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /** פותח את חלון המפה במסך מלא */
@@ -203,6 +310,75 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendGpsToMap(lat: Double, lon: Double) {
         binding.mapWebView.evaluateJavascript("centerOnGps('$lat', '$lon')", null)
+    }
+
+    // ============ מעקב GPS רציף (טוגל הדלקה/כיבוי) ============
+    private var isGpsFollowActive = false
+    private var gpsFollowListener: android.location.LocationListener? = null
+
+    private fun toggleGpsFollow() {
+        if (isGpsFollowActive) {
+            stopGpsFollow()
+        } else {
+            val hasPermission = ContextCompat.checkSelfPermission(
+                this, Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+
+            if (hasPermission) {
+                startGpsFollow()
+            } else {
+                pendingGpsFollowAfterPermission = true
+                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+        }
+    }
+
+    private var pendingGpsFollowAfterPermission = false
+
+    /**
+     * מתחיל מעקב רציף אחרי מיקום ה-GPS, ומרכז את המפה אוטומטית בכל עדכון מיקום.
+     * נשאר פעיל כל עוד הטוגל מודלק, גם אם המשתמש סוגר ופותח את המפה מחדש.
+     */
+    @SuppressLint("MissingPermission")
+    private fun startGpsFollow() {
+        val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        val listener = android.location.LocationListener { location ->
+            sendGpsToMap(location.latitude, location.longitude)
+        }
+        gpsFollowListener = listener
+
+        try {
+            val providers = locationManager.getProviders(true)
+            for (provider in providers) {
+                locationManager.requestLocationUpdates(provider, 3000L, 5f, listener, Looper.getMainLooper())
+            }
+            isGpsFollowActive = true
+            updateGpsFollowButtonState()
+            Toast.makeText(this, getString(R.string.gps_follow_on), Toast.LENGTH_SHORT).show()
+        } catch (e: SecurityException) {
+            Toast.makeText(this, getString(R.string.error_location_permission_denied), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun stopGpsFollow() {
+        val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        gpsFollowListener?.let { locationManager.removeUpdates(it) }
+        gpsFollowListener = null
+        isGpsFollowActive = false
+        updateGpsFollowButtonState()
+        Toast.makeText(this, getString(R.string.gps_follow_off), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateGpsFollowButtonState() {
+        val color = if (isGpsFollowActive) {
+            android.graphics.Color.parseColor("#3498db")
+        } else {
+            android.graphics.Color.parseColor("#95a5a6")
+        }
+        binding.btnToggleGpsFollow.imageTintList = android.content.res.ColorStateList.valueOf(color)
     }
 
     private fun updateHintForSource() {
@@ -423,6 +599,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var lastCoords: Coordinates? = null
+    private var cachedSnapshotUri: Uri? = null
 
     private fun showResult(coords: Coordinates) {
         lastCoords = coords
@@ -434,6 +611,11 @@ class MainActivity : AppCompatActivity() {
         binding.mapWebView.evaluateJavascript(
             "centerOnCoordinates('${coords.lat}', '${coords.lon}')", null
         )
+
+        // מצלמים snapshot של המפה כעת, כשהיא גלויה ומורכזת בפועל על המסך - ושומרים אותו
+        // במטמון. כך, גם כשהמפה תיסגר כדי שהמשתמש יגיע לכפתורי השליחה, יהיה לנו תצלום
+        // תקף לשימוש בשליחה ב-WhatsApp.
+        binding.mapWebView.postDelayed({ cachedSnapshotUri = captureMapSnapshot() }, 600)
     }
 
     private fun copyToClipboard() {
@@ -472,6 +654,107 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * בונה את טקסט ההודעה לשליחה: תיאור חופשי (אם הוזן), קואורדינטות, קישור Google Maps
+     * וקישור ניווט Waze. אותו טקסט משמש גם ל-SMS וגם ל-WhatsApp (ב-WhatsApp הוא מצורף
+     * כקאפשן לתמונת ה-snapshot).
+     */
+    private fun buildShareMessage(coords: Coordinates): String {
+        val description = binding.editDescription.text?.toString()?.trim().orEmpty()
+        val mapsLink = "https://www.google.com/maps?q=${coords.lat},${coords.lon}"
+        val wazeLink = "https://waze.com/ul?ll=${coords.lat},${coords.lon}&navigate=yes"
+
+        val lines = mutableListOf<String>()
+        if (description.isNotEmpty()) {
+            lines.add("${getString(R.string.msg_point_label)}: $description")
+        }
+        lines.add("${getString(R.string.msg_coords_label)}: ${coords.lon}, ${coords.lat}")
+        lines.add("${getString(R.string.msg_maps_label)}: $mapsLink")
+        lines.add("${getString(R.string.msg_waze_label)}: $wazeLink")
+
+        return lines.joinToString("\n")
+    }
+
+    /**
+     * מצלם snapshot של ה-WebView שמציג את המפה, בדיוק כפי שהיא מוצגת על מסך המשתמש כרגע.
+     * שומר את התמונה כקובץ זמני בתיקיית ה-cache ומחזיר Uri דרך FileProvider שניתן לשתף
+     * עם אפליקציות אחרות (WhatsApp וכו'). מחזיר null אם המפה אינה פתוחה כרגע (ולכן אין
+     * ל-WebView מימדים בפועל) או אם הצילום נכשל מסיבה אחרת.
+     */
+    private fun captureMapSnapshot(): Uri? {
+        val webView = binding.mapWebView
+        if (webView.width == 0 || webView.height == 0) return null
+
+        return try {
+            val bitmap = Bitmap.createBitmap(webView.width, webView.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            webView.draw(canvas)
+
+            val imagesDir = File(cacheDir, "images")
+            if (!imagesDir.exists()) imagesDir.mkdirs()
+            val file = File(imagesDir, "map_snapshot_${System.currentTimeMillis()}.png")
+            FileOutputStream(file).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
+            }
+
+            FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * שולח SMS עם תוכן ההודעה (תיאור + קואורדינטות + קישורי Maps/Waze).
+     * SMS לא תומך בצירוף תמונה באופן סטנדרטי, ולכן רק טקסט נשלח - אך הקישור ל-Google Maps
+     * שבתוך הטקסט מציג ויזואלית את אותה נקודה כשהנמען פותח אותו.
+     */
+    private fun sendViaSms() {
+        val coords = lastCoords ?: return
+        val message = buildShareMessage(coords)
+
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("smsto:")
+            putExtra("sms_body", message)
+        }
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, getString(R.string.error_no_sms_app), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * שולח ב-WhatsApp את אותו טקסט בתור קאפשן, בצירוף תצלום (snapshot) של המפה כתמונה.
+     * אם המפה פתוחה כרגע על המסך - מצלמים תצלום טרי. אחרת משתמשים בתצלום שנשמר במטמון
+     * מהרגע שהמפה נפתחה ומורכזה אוטומטית בעת החישוב (ב-showResult). אם שני המקורות נכשלים,
+     * נשלח לפחות הטקסט בלבד כדי שהפעולה לא תיכשל כליל.
+     */
+    private fun sendViaWhatsapp() {
+        val coords = lastCoords ?: return
+        val message = buildShareMessage(coords)
+        val snapshotUri = if (isMapVisible) captureMapSnapshot() else null
+        val finalSnapshotUri = snapshotUri ?: cachedSnapshotUri
+
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            setPackage("com.whatsapp")
+            putExtra(Intent.EXTRA_TEXT, message)
+            if (finalSnapshotUri != null) {
+                type = "image/png"
+                putExtra(Intent.EXTRA_STREAM, finalSnapshotUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } else {
+                type = "text/plain"
+                Toast.makeText(this, getString(R.string.error_snapshot_failed), Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, getString(R.string.error_no_whatsapp_app), Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun setLoading(loading: Boolean) {
         binding.progressBar.visibility = if (loading) android.view.View.VISIBLE else android.view.View.GONE
         binding.btnConvert.isEnabled = !loading
@@ -484,5 +767,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun hideError() {
         binding.errorText.visibility = android.view.View.GONE
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // עוצרים מעקב GPS רציף כדי לא להמשיך לצרוך סוללה אחרי שהאפליקציה נסגרה
+        gpsFollowListener?.let {
+            val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+            locationManager.removeUpdates(it)
+        }
     }
 }
