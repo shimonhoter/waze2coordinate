@@ -367,6 +367,13 @@
         </div>
     </div>
 
+    <div class="toolbar-item">
+        <button class="toolbar-btn" id="btnTilt3D">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3,16 L12,20 L21,16 L12,12 Z"/><path d="M3,16 L3,9 L12,5 L21,9 L21,16" stroke-dasharray="2,2"/></svg>
+        </button>
+        <div class="toolbar-tooltip">הטיית מפה ל-3D (פרספקטיבה)</div>
+    </div>
+
 </div>
 
 <div class="measure-readout" id="measureReadout"></div>
@@ -393,6 +400,14 @@ var DEFAULT_LAT = 31.7683;
 var DEFAULT_LON = 35.2137;
 var DEFAULT_ZOOM = 8;
 
+// תוסף RTL חיוני - בלי זה MapLibre מציג טקסט עברי/ערבי הפוך (אותיות נכונות אך בכיוון
+// LTR): https://maplibre.org/maplibre-gl-js/docs/examples/add-support-for-right-to-left-scripts/
+// משתמשים בגרסה 0.2.3 (לא 0.3.0) - גרסת ה-0.3.0 ידועה כנכשלת בטעינה בחלק מהסביבות.
+maplibregl.setRTLTextPlugin(
+    'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js',
+    true // lazy load - נטען רק כשבאמת נדרש טקסט RTL, לא תמיד
+);
+
 // OpenFreeMap - מקור אריחים וקטוריים חינמי ולא מוגבל (ללא מפתח API), מבוסס OpenStreetMap.
 // "liberty" הוא סטייל מודרני ועשיר יותר ויזואלית מהאריחים הראסטריים (תמונה) שהיו בשימוש קודם.
 var STREET_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
@@ -402,6 +417,7 @@ var map = new maplibregl.Map({
     style: STREET_STYLE_URL,
     center: [DEFAULT_LON, DEFAULT_LAT], // MapLibre: [lng, lat], לא [lat, lng] כמו ב-Leaflet
     zoom: DEFAULT_ZOOM,
+    pitch: 0,
     attributionControl: true
 });
 map.addControl(new maplibregl.NavigationControl(), 'top-left');
@@ -426,11 +442,25 @@ function switchMapStyle(style) {
             },
             layers: [{ id: 'satellite-layer', type: 'raster', source: 'satellite-tiles' }]
         });
-        map.once('styledata', reinitializeAfterStyleChange);
+        waitForStyleLoadedThen(reinitializeAfterStyleChange);
     } else if (style === 'street' && isSatelliteMode) {
         isSatelliteMode = false;
         map.setStyle(STREET_STYLE_URL);
-        map.once('styledata', reinitializeAfterStyleChange);
+        waitForStyleLoadedThen(reinitializeAfterStyleChange);
+    }
+}
+
+/**
+ * setStyle() מחליף את כל ה-style באופן אסינכרוני, וה-event 'styledata' לא אמין לדעת מתי
+ * זה בטוח להוסיף sources/layers מותאמים-אישית מחדש (לפעמים יורה לפני שהסטייל סיים להיטען
+ * בפועל, ולפעמים לא יורה כלל בקריאות חזרה). הפתרון המתועד והאמין: poll על isStyleLoaded()
+ * עד שהוא מחזיר true, ורק אז להמשיך.
+ */
+function waitForStyleLoadedThen(callback) {
+    if (map.isStyleLoaded()) {
+        callback();
+    } else {
+        setTimeout(function() { waitForStyleLoadedThen(callback); }, 80);
     }
 }
 
@@ -552,6 +582,7 @@ function setUiMode(mode) {
     currentMode = mode;
     currentDrawTool = null;
     cancelInProgressDrawing();
+    clearVertexHandles();
 
     document.querySelectorAll('.toolbar-btn[data-mode]').forEach(function(btn) {
         btn.classList.toggle('active', btn.dataset.mode === mode);
@@ -603,6 +634,8 @@ map.on('click', function(e) {
         }
     } else if (currentMode === 'edit') {
         closeAllPopups();
+        clearVertexHandles();
+        activeEditShapeId = null;
     } else if (currentMode === 'draw' && currentDrawTool) {
         handleDrawClick(e.lngLat);
     }
@@ -625,6 +658,14 @@ document.getElementById('btnMapStyle').addEventListener('click', function() {
 });
 document.getElementById('btnStyleStreet').addEventListener('click', function() { switchMapStyle('street'); });
 document.getElementById('btnStyleSatellite').addEventListener('click', function() { switchMapStyle('satellite'); });
+
+// ===== הטיית מפה ל-3D (pitch) - טוגל בין מבט שטוח (pitch=0) למבט פרספקטיבי (pitch=55) =====
+var is3DTiltActive = false;
+document.getElementById('btnTilt3D').addEventListener('click', function() {
+    is3DTiltActive = !is3DTiltActive;
+    this.classList.toggle('active', is3DTiltActive);
+    map.easeTo({ pitch: is3DTiltActive ? 55 : 0, duration: 500 });
+});
 
 // ===== הגדרות ברירת מחדל לסימונים ותוויות טקסט =====
 var DEFAULT_MARKER_COLOR = '#e74c3c';
@@ -708,6 +749,90 @@ function onShapeLayerClick(e) {
     var feature = e.features[0];
     var shapeId = feature.properties.shapeId;
     openEditPopupForShape(shapeId, e.point);
+    showVertexHandlesFor(shapeId);
+}
+
+// ===== ידיות עריכה (vertex handles) - מאפשרות גרירה לשינוי גודל/צורה של ציור קיים,
+// מקביל ל-edit toolbar שהיה קיים ב-L.Control.Draw. כל נקודה בגיאומטריה (או מרכז+נקודת
+// היקף לעיגול) מקבלת ידית גרירה; גרירה מעדכנת את הגיאומטריה בזמן אמת. =====
+var activeVertexHandles = [];
+
+function clearVertexHandles() {
+    activeVertexHandles.forEach(function(h) { h.remove(); });
+    activeVertexHandles = [];
+}
+
+function showVertexHandlesFor(shapeId) {
+    clearVertexHandles();
+    var entry = shapeRegistry[shapeId];
+    if (!entry) return;
+
+    if (entry.kind === 'circle') {
+        addVertexHandle(entry.props.center, function(newLngLat) {
+            entry.props.center = newLngLat;
+            entry.feature.geometry = makeCirclePolygon(newLngLat[0], newLngLat[1], entry.props.radius).geometry;
+            updateShapesSource();
+        });
+        // ידית רדיוס - נקודה על הקצה המזרחי של המעגל, גרירתה משנה את הרדיוס
+        var edgePoint = destinationPoint(entry.props.center, entry.props.radius, 90);
+        addVertexHandle(edgePoint, function(newLngLat) {
+            var newRadius = haversineDistance(entry.props.center[1], entry.props.center[0], newLngLat[1], newLngLat[0]);
+            entry.props.radius = newRadius;
+            entry.feature.geometry = makeCirclePolygon(entry.props.center[0], entry.props.center[1], newRadius).geometry;
+            updateShapesSource();
+        }, '#e74c3c');
+    } else {
+        var coords = (entry.kind === 'polyline') ? entry.feature.geometry.coordinates : entry.feature.geometry.coordinates[0];
+        coords.forEach(function(coord, index) {
+            addVertexHandle(coord, function(newLngLat) {
+                if (entry.kind === 'polyline') {
+                    entry.feature.geometry.coordinates[index] = newLngLat;
+                } else {
+                    entry.feature.geometry.coordinates[0][index] = newLngLat;
+                    // אם זו הנקודה הראשונה של פוליגון/מלבן סגור, מעדכנים גם את הנקודה
+                    // האחרונה (הזהה לראשונה, סוגרת את הטבעת) כדי שהצורה תישאר סגורה
+                    var ring = entry.feature.geometry.coordinates[0];
+                    if (index === 0) ring[ring.length - 1] = newLngLat;
+                }
+                updateShapesSource();
+                persistShapes();
+            });
+        });
+    }
+}
+
+function addVertexHandle(lngLat, onDrag, color) {
+    var el = document.createElement('div');
+    el.className = 'vertex-handle';
+    if (color) el.style.borderColor = color;
+    var marker = new maplibregl.Marker({ element: el, draggable: true, anchor: 'center' })
+        .setLngLat(lngLat)
+        .addTo(map);
+    marker.on('drag', function() {
+        var ll = marker.getLngLat();
+        onDrag([ll.lng, ll.lat]);
+    });
+    marker.on('dragend', function() {
+        persistShapes();
+    });
+    activeVertexHandles.push(marker);
+    return marker;
+}
+
+/** נקודה במרחק radiusMeters ובכיוון bearingDeg ממרכז נתון - שימוש לידית הרדיוס של עיגול */
+function destinationPoint(centerLngLat, radiusMeters, bearingDeg) {
+    var R = 6378137;
+    var lat1 = centerLngLat[1] * Math.PI / 180;
+    var lon1 = centerLngLat[0] * Math.PI / 180;
+    var bearing = bearingDeg * Math.PI / 180;
+    var angularDist = radiusMeters / R;
+
+    var lat2 = Math.asin(Math.sin(lat1) * Math.cos(angularDist) + Math.cos(lat1) * Math.sin(angularDist) * Math.cos(bearing));
+    var lon2 = lon1 + Math.atan2(
+        Math.sin(bearing) * Math.sin(angularDist) * Math.cos(lat1),
+        Math.cos(angularDist) - Math.sin(lat1) * Math.sin(lat2)
+    );
+    return [lon2 * 180 / Math.PI, lat2 * 180 / Math.PI];
 }
 
 function updateShapesSource() {
@@ -830,12 +955,40 @@ function handleDrawClick(lngLat) {
     }
 }
 
+/**
+ * מאפשר למרקר (פין/תווית טקסט) להיות ניתן לגרירה רק במצב "עריכה" - מקביל ליכולת
+ * הזזת סימון קיים שהייתה ב-edit toolbar של L.Control.Draw. ה-draggable property
+ * של maplibregl.Marker עצמו נשאר true כל הזמן (טכני, כי MapLibre לא תומך בהחלפת
+ * draggable אחרי היצירה בלי לבדוק ב-event), אבל בפועל אנחנו "נועלים" את הגרירה
+ * בעת mousedown אם המצב הנוכחי אינו edit.
+ */
+function setupMarkerDragBehavior(marker, id) {
+    marker.on('dragstart', function() {
+        if (currentMode !== 'edit') {
+            // לא במצב עריכה - לא מאפשרים גרירה בפועל (מחזירים את המרקר במקום מיד ב-dragend)
+            marker._wasBlockedDrag = true;
+        }
+    });
+    marker.on('dragend', function() {
+        if (marker._wasBlockedDrag) {
+            marker._wasBlockedDrag = false;
+            var entry = shapeRegistry[id];
+            if (entry) marker.setLngLat(entry.lonLat);
+            return;
+        }
+        var ll = marker.getLngLat();
+        var entry = shapeRegistry[id];
+        if (entry) entry.lonLat = [ll.lng, ll.lat];
+        persistShapes();
+    });
+}
+
 function promptAndPlaceMarker(lonLat) {
     var text = window.prompt('טקסט לתווית (ניתן להשאיר ריק):', '') || '';
     var id = 'shape-' + (nextShapeId++);
     var props = { kind: 'marker', color: DEFAULT_MARKER_COLOR, size: DEFAULT_MARKER_SIZE, iconKey: DEFAULT_MARKER_ICON_KEY, text: text };
     var el = makeMarkerElement(props.size, props.color, props.iconKey, props.text);
-    var marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lonLat).addTo(map);
+    var marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true }).setLngLat(lonLat).addTo(map);
     el.addEventListener('click', function(ev) {
         if (currentMode === 'edit') {
             ev.stopPropagation();
@@ -843,6 +996,7 @@ function promptAndPlaceMarker(lonLat) {
         }
     });
     shapeRegistry[id] = { kind: 'marker', marker: marker, props: props, lonLat: lonLat };
+    setupMarkerDragBehavior(marker, id);
     persistShapes();
 }
 
@@ -852,7 +1006,7 @@ function promptAndPlaceTextLabel(lonLat) {
     var id = 'shape-' + (nextShapeId++);
     var props = { kind: 'text', color: DEFAULT_TEXT_LABEL_COLOR, fontSize: DEFAULT_TEXT_LABEL_SIZE, text: text };
     var el = makeTextLabelElement(props.text, props.color, props.fontSize);
-    var marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lonLat).addTo(map);
+    var marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true }).setLngLat(lonLat).addTo(map);
     el.addEventListener('click', function(ev) {
         if (currentMode === 'edit') {
             ev.stopPropagation();
@@ -860,6 +1014,7 @@ function promptAndPlaceTextLabel(lonLat) {
         }
     });
     shapeRegistry[id] = { kind: 'text', marker: marker, props: props, lonLat: lonLat };
+    setupMarkerDragBehavior(marker, id);
     persistShapes();
 }
 
@@ -1051,11 +1206,13 @@ function buildEditPopupElement() {
             deleteShape(activeEditShapeId);
             activeEditShapeId = null;
             popup.classList.remove('visible');
+            clearVertexHandles();
         }
     });
     document.getElementById('editCloseBtn').addEventListener('click', function() {
         popup.classList.remove('visible');
         activeEditShapeId = null;
+        clearVertexHandles();
     });
 
     return popup;
@@ -1089,7 +1246,7 @@ function applyEditChanges() {
         newEl.addEventListener('click', function(ev) {
             if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(id, ev); }
         });
-        replaceMarkerElement(entry, newEl);
+        replaceMarkerElement(entry, newEl, id);
     } else if (entry.kind === 'text') {
         entry.props.color = color;
         entry.props.fontSize = weightVal;
@@ -1098,7 +1255,7 @@ function applyEditChanges() {
         newTextEl.addEventListener('click', function(ev) {
             if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(tid, ev); }
         });
-        replaceMarkerElement(entry, newTextEl);
+        replaceMarkerElement(entry, newTextEl, tid);
     } else if (entry.kind === 'circle') {
         entry.props.color = color;
         entry.props.opacity = opacityPct / 100;
@@ -1120,10 +1277,11 @@ function applyEditChanges() {
     persistShapes();
 }
 
-function replaceMarkerElement(entry, newEl) {
+function replaceMarkerElement(entry, newEl, id) {
     var lonLat = entry.marker.getLngLat();
     entry.marker.remove();
-    entry.marker = new maplibregl.Marker({ element: newEl, anchor: 'center' }).setLngLat(lonLat).addTo(map);
+    entry.marker = new maplibregl.Marker({ element: newEl, anchor: 'center', draggable: true }).setLngLat(lonLat).addTo(map);
+    setupMarkerDragBehavior(entry.marker, id);
 }
 
 // ===== שמירה/טעינה - פורמט עצמאי (לא GeoJSON גנרי), נשמר דרך Kotlin/filesDir =====
@@ -1170,8 +1328,9 @@ function loadShapesFromJson(jsonStr) {
                 el.addEventListener('click', function(ev) {
                     if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(id, ev); }
                 });
-                var marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([entry.lon, entry.lat]).addTo(map);
+                var marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
                 shapeRegistry[id] = { kind: 'marker', marker: marker, props: props, lonLat: [entry.lon, entry.lat] };
+                setupMarkerDragBehavior(marker, id);
             } else if (entry.kind === 'text') {
                 var tid = 'shape-' + (nextShapeId++);
                 var tprops = { kind: 'text', color: entry.color, fontSize: entry.fontSize, text: entry.text };
@@ -1179,8 +1338,9 @@ function loadShapesFromJson(jsonStr) {
                 tel.addEventListener('click', function(ev) {
                     if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(tid, ev); }
                 });
-                var tmarker = new maplibregl.Marker({ element: tel, anchor: 'center' }).setLngLat([entry.lon, entry.lat]).addTo(map);
+                var tmarker = new maplibregl.Marker({ element: tel, anchor: 'center', draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
                 shapeRegistry[tid] = { kind: 'text', marker: tmarker, props: tprops, lonLat: [entry.lon, entry.lat] };
+                setupMarkerDragBehavior(tmarker, tid);
             } else if (entry.kind === 'circle') {
                 var cid = 'shape-' + (nextShapeId++);
                 var cprops = { color: entry.color, opacity: entry.opacity, weight: entry.weight, radius: entry.radius, center: [entry.lon, entry.lat] };
