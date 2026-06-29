@@ -3,13 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
     <style>
 /* [START: MapCSS] */
         html, body, #map { height: 100%; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
 
-        /* ===== כפתור פתיחת/סגירת הסרגל הצף-צד - שכבה עליונה ביותר מכל אלמנט אחר במפה ===== */
         .toolbar-toggle-btn {
             position: absolute;
             top: 60px;
@@ -29,8 +27,6 @@
         }
         .toolbar-toggle-btn svg { width: 22px; height: 22px; }
 
-        /* ===== סרגל כלים ראשי - נשלף מהצד (slide-out), שכבה עליונה ביותר (z-index גבוה
-             מכל אלמנט צף אחר על המפה: חיפוש, GPS, רמזים) כדי שלא יחפוף לאחרים כשפתוח. ===== */
         .map-toolbar {
             position: absolute;
             top: 108px;
@@ -54,9 +50,7 @@
             pointer-events: auto;
         }
 
-        .toolbar-item {
-            position: relative; /* מאפשר לתפריט הצץ להתמקם במדויק ביחס לכפתור, בלי לחפוף לאחרים */
-        }
+        .toolbar-item { position: relative; }
 
         .toolbar-btn {
             width: 42px;
@@ -75,10 +69,8 @@
         .toolbar-btn.active { background: #3498db; color: #ffffff; }
         .toolbar-btn svg { width: 22px; height: 22px; pointer-events: none; }
 
-        /* קו מפריד דק בין קבוצות כלים */
         .toolbar-divider { height: 1px; background: #e2e8f0; margin: 2px 4px; }
 
-        /* ===== טולטיפ - מוצג בריחוף, נפתח שמאלה (לכיוון שאינו חוסם כפתורים אחרים) ===== */
         .toolbar-tooltip {
             position: absolute;
             right: 50px;
@@ -98,7 +90,6 @@
         }
         .toolbar-item:hover .toolbar-tooltip { opacity: 1; }
 
-        /* ===== תפריט צץ (popup) של כלי - נפתח שמאלה מתחת לכפתור, לא חוסם כלים אחרים ===== */
         .options-popup {
             position: absolute;
             right: 50px;
@@ -113,22 +104,12 @@
             direction: rtl;
         }
         .options-popup.visible { display: block; }
-        .options-popup .popup-title {
-            font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;
-        }
-        .options-popup .option-row {
-            display: flex; align-items: center; margin-bottom: 8px; gap: 8px;
-        }
+        .options-popup .popup-title { font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 10px; }
+        .options-popup .option-row { display: flex; align-items: center; margin-bottom: 8px; gap: 8px; }
         .options-popup .option-row label { font-size: 12px; color: #555; min-width: 56px; }
         .options-popup .option-row input[type=range] { flex: 1; }
         .options-popup .option-row input[type=color] { width: 32px; height: 26px; border: none; padding: 0; border-radius: 4px; }
         .options-popup .option-row span.val { font-size: 11px; color: #888; min-width: 28px; text-align: left; }
-        .options-popup .icon-choices { display: flex; gap: 6px; flex-wrap: wrap; }
-        .options-popup .icon-choice {
-            width: 30px; height: 30px; border-radius: 6px; border: 2px solid transparent;
-            display: flex; align-items: center; justify-content: center; cursor: pointer; background: #f0f4f8;
-        }
-        .options-popup .icon-choice.selected { border-color: #3498db; }
         .options-popup .popup-actions { display: flex; gap: 6px; margin-top: 8px; }
         .options-popup .popup-actions button {
             flex: 1; padding: 7px; border: none; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer;
@@ -136,7 +117,16 @@
         .options-popup .btn-done { background: #3498db; color: white; }
         .options-popup .btn-delete { background: #e74c3c; color: white; }
 
-        /* ===== חלונית מדידה (מרחק/שטח) בזמן ציור - לא חוסמת את הסרגל ===== */
+        /* תפריט בחירת כלי ציור - מציג ב-popup קבוע (אין L.Control.Draw מקביל ב-MapLibre,
+           לכן בונים בחירת-כלי עצמאית: פין, טקסט, קו, פוליגון, מלבן, עיגול) */
+        .draw-tool-list { display: flex; flex-direction: column; gap: 4px; }
+        .draw-tool-list button {
+            display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: none;
+            background: #f8f9fa; border-radius: 8px; font-size: 13px; cursor: pointer; text-align: right;
+        }
+        .draw-tool-list button.active { background: #3498db; color: #fff; }
+        .draw-tool-list button svg { width: 18px; height: 18px; flex-shrink: 0; }
+
         .measure-readout {
             position: absolute;
             top: 60px;
@@ -153,7 +143,6 @@
         }
         .measure-readout.visible { display: block; }
 
-        /* ===== תיבת חיפוש כתובת - שורה עליונה, לא מתנגשת עם הסרגל הצדדי ===== */
         .address-search-bar {
             position: absolute;
             top: 10px;
@@ -187,7 +176,6 @@
         }
         .address-search-bar button svg { width: 20px; height: 20px; color: #2c3e50; }
 
-        /* ===== כפתורי GPS - פינה תחתונה-שמאלית (לא מתנגש עם הסרגל הימני) ===== */
         .gps-controls {
             position: absolute;
             bottom: 20px;
@@ -215,8 +203,6 @@
         .gps-btn.gps-follow-off svg { color: #95a5a6; }
         .gps-btn.gps-center svg { color: #3498db; }
 
-        /* תג "A" על כפתור המעקב האוטומטי - מבדיל אותו חזותית מכפתור המירכוז החד-פעמי
-           (שניהם בעלי אותה צורה עגולה, אבל האייקון שונה והתג מבהיר את ההבדל בפונקציונליות) */
         .gps-badge {
             position: absolute;
             bottom: -2px;
@@ -235,7 +221,6 @@
         }
         .gps-btn.gps-follow-on .gps-badge { background: #3498db; }
 
-        /* ===== טקסט עזרה תחתון ===== */
         .map-hint-text {
             position: absolute;
             bottom: 0;
@@ -265,12 +250,7 @@
             margin-top: 2px;
         }
 
-        /* תווית טקסט חופשית - בלי פין, רק טקסט עם הילה לבנה כדי שיהיה קריא על כל רקע מפה */
         .free-text-label {
-            background: transparent !important;
-            border: none !important;
-        }
-        .free-text-label-inner {
             white-space: nowrap;
             font-weight: bold;
             text-shadow:
@@ -278,38 +258,43 @@
                 -1px 1px 0 #fff, 1px 1px 0 #fff,
                 0 0 4px rgba(255,255,255,0.8);
             direction: rtl;
+            cursor: pointer;
         }
 
-        /* תיקון מיקום בקרות Leaflet המובנות (כולל L.Control.Draw) - מוזז למטה כדי לא
-           לחפוף עם שורת החיפוש שתופסת את הפינה השמאלית-עליונה */
-        .leaflet-top.leaflet-left { top: 64px; }
-        .leaflet-control-attribution { font-size: 9px; }
+        .custom-marker-icon { cursor: pointer; }
 
-        /* ===== מצב "מוטמע" - כשהמפה חיה בתוך כרטיס בעמוד הראשי (לא הורחבה למסך מלא),
-           מוצגת רק מפה נקייה עם סמן בחירה. כל הכלים המתקדמים (חיפוש, סרגל ציור, GPS,
-           רמז תחתון, ובקרות הזום הטבעיות של Leaflet) מוסתרים - נשלט מ-Kotlin בכל
-           הרחבה/כיווץ באמצעות setEmbeddedChromeVisible(). ===== */
+        /* תיקון מיקום בקרות MapLibre המובנות (זום/קומפס) - מוזז למטה כדי לא לחפוף
+           עם שורת החיפוש שתופסת את הפינה השמאלית-עליונה */
+        .maplibregl-ctrl-top-left { top: 64px; }
+        .maplibregl-ctrl-attrib { font-size: 9px; }
+
+        /* נקודת עזר לעריכת צורות (vertex handle) - גרירה לשינוי גודל/צורה */
+        .vertex-handle {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 2px solid #3498db;
+            cursor: grab;
+        }
+
         body.embedded-mode .address-search-bar,
         body.embedded-mode .toolbar-toggle-btn,
         body.embedded-mode .map-toolbar,
         body.embedded-mode .measure-readout,
         body.embedded-mode .gps-controls,
         body.embedded-mode .map-hint-text,
-        body.embedded-mode .leaflet-control-container {
+        body.embedded-mode .maplibregl-control-container {
             display: none !important;
         }
 
-        /* ===== מצב "צילום נקי" - מוסיפים את clean-capture-mode לתוך body רגע לפני
-           לכידת snapshot, כדי שהתמונה שנשמרת תכיל רק את המפה והסימונים, בלי שום פקד
-           (סרגל כלים, חיפוש, GPS, רמזים, ואפילו כפתורי הזום הטבעיים של Leaflet). מוסר
-           מיד אחרי הצילום - המשתמש לא רואה את הפעולה בכלל, היא חולפת ב-frame אחד. ===== */
         body.clean-capture-mode .address-search-bar,
         body.clean-capture-mode .toolbar-toggle-btn,
         body.clean-capture-mode .map-toolbar,
         body.clean-capture-mode .measure-readout,
         body.clean-capture-mode .gps-controls,
         body.clean-capture-mode .map-hint-text,
-        body.clean-capture-mode .leaflet-control-container {
+        body.clean-capture-mode .maplibregl-control-container {
             visibility: hidden !important;
         }
 /* [END: MapCSS] */
@@ -326,14 +311,12 @@
     </button>
 </div>
 
-<!-- כפתור פתיחת/סגירת הסרגל הצף - שכבה עליונה ביותר -->
 <button id="toolbarToggleBtn" class="toolbar-toggle-btn" title="כלים">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,18h18v-2H3V18zM3,13h18v-2H3V13zM3,6v2h18V6H3z"/></svg>
 </button>
 
-<!-- סרגל הכלים הראשי - נשלף מהצד, שכבה עליונה ביותר. כלי הציור עצמם (פין/קו/פוליגון/
-     מלבן/עיגול) מסופקים ע"י L.Control.Draw הטבעי של Leaflet (הסרגל המורחב ביותר שיש,
-     עם תפריט edit/delete מובנה כולל גרירת ידיות לשינוי גודל) - מצורף למפה ב-JS. -->
+<!-- סרגל הכלים הראשי - נשלף מהצד. כלי הציור עצמם (אין L.Control.Draw מקביל ב-MapLibre)
+     נבנו עצמאית: תפריט בחירת-כלי בתוך מצב draw, עם 6 סוגי אלמנט. -->
 <div class="map-toolbar" id="mainToolbar">
 
     <div class="toolbar-item">
@@ -348,20 +331,24 @@
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,17.25V21h3.75L17.81,9.94l-3.75,-3.75L3,17.25zM20.71,7.04c0.39,-0.39 0.39,-1.02 0,-1.41l-2.34,-2.34c-0.39,-0.39 -1.02,-0.39 -1.41,0l-1.83,1.83 3.75,3.75 1.83,-1.83z"/></svg>
         </button>
         <div class="toolbar-tooltip">מצב ציור - הוסף סימונים וצורות</div>
-    </div>
-
-    <div class="toolbar-item">
-        <button class="toolbar-btn" id="btnAddTextLabel">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5,4v3h5.5v12h3V7H19V4H5z"/></svg>
-        </button>
-        <div class="toolbar-tooltip">הוסף תווית טקסט על המפה</div>
+        <div class="options-popup" id="drawToolPopup">
+            <div class="popup-title">בחר כלי ציור</div>
+            <div class="draw-tool-list">
+                <button data-tool="marker"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,2C8.13,2 5,5.13 5,9c0,5.25 7,13 7,13s7,-7.75 7,-13C19,5.13 15.87,2 12,2z"/></svg>סימון (פין)</button>
+                <button data-tool="text"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5,4v3h5.5v12h3V7H19V4H5z"/></svg>תווית טקסט</button>
+                <button data-tool="line"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4,18 L10,8 L14,14 L20,5"/></svg>קו ומרחק</button>
+                <button data-tool="polygon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12,3 L20,9 L17,19 L7,19 L4,9 Z"/></svg>פוליגון ושטח</button>
+                <button data-tool="rectangle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="12"/></svg>מלבן</button>
+                <button data-tool="circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>עיגול</button>
+            </div>
+        </div>
     </div>
 
     <div class="toolbar-item">
         <button class="toolbar-btn" id="btnEditShapes" data-mode="edit">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19,13H5v-2h14V13z"/></svg>
         </button>
-        <div class="toolbar-tooltip">ערוך צבע/שקיפות/עובי של ציור קיים</div>
+        <div class="toolbar-tooltip">ערוך צבע/שקיפות/עובי/גודל של ציור קיים</div>
     </div>
 
     <div class="toolbar-divider"></div>
@@ -397,8 +384,7 @@
 <div class="map-hint-text" id="mapHintText">הקש על המפה לבחירת מיקום</div>
 <!-- [END: MapHTML] -->
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 <script>
 // [START: MapLogic]
 
@@ -407,24 +393,53 @@ var DEFAULT_LAT = 31.7683;
 var DEFAULT_LON = 35.2137;
 var DEFAULT_ZOOM = 8;
 
-var map = L.map('map', { zoomControl: true }).setView([DEFAULT_LAT, DEFAULT_LON], DEFAULT_ZOOM);
+// OpenFreeMap - מקור אריחים וקטוריים חינמי ולא מוגבל (ללא מפתח API), מבוסס OpenStreetMap.
+// "liberty" הוא סטייל מודרני ועשיר יותר ויזואלית מהאריחים הראסטריים (תמונה) שהיו בשימוש קודם.
+var STREET_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
-var streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19
+var map = new maplibregl.Map({
+    container: 'map',
+    style: STREET_STYLE_URL,
+    center: [DEFAULT_LON, DEFAULT_LAT], // MapLibre: [lng, lat], לא [lat, lng] כמו ב-Leaflet
+    zoom: DEFAULT_ZOOM,
+    attributionControl: true
 });
-var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri',
-    maxZoom: 19
-});
-streetLayer.addTo(map);
-var currentTileLayer = streetLayer;
+map.addControl(new maplibregl.NavigationControl(), 'top-left');
+
+var isSatelliteMode = false;
 
 function switchMapStyle(style) {
-    map.removeLayer(currentTileLayer);
-    currentTileLayer = (style === 'satellite') ? satelliteLayer : streetLayer;
-    currentTileLayer.addTo(map);
     closeAllPopups();
+    if (style === 'satellite' && !isSatelliteMode) {
+        isSatelliteMode = true;
+        // Esri World Imagery - שכבת רקע ראסטרית (לא וקטורית - לא קיים מקור וקטורי חינמי
+        // ללוויין), מוצגת כ-style נפרד מלא כדי לא לערבב מקורות וקטוריים/ראסטריים בעת מעבר
+        map.setStyle({
+            version: 8,
+            sources: {
+                'satellite-tiles': {
+                    type: 'raster',
+                    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+                    tileSize: 256,
+                    attribution: 'Tiles &copy; Esri'
+                }
+            },
+            layers: [{ id: 'satellite-layer', type: 'raster', source: 'satellite-tiles' }]
+        });
+        map.once('styledata', reinitializeAfterStyleChange);
+    } else if (style === 'street' && isSatelliteMode) {
+        isSatelliteMode = false;
+        map.setStyle(STREET_STYLE_URL);
+        map.once('styledata', reinitializeAfterStyleChange);
+    }
+}
+
+// כשמחליפים style לחלוטין (setStyle), MapLibre מאפס sources/layers מותאמים-אישית (לא markers
+// שהם DOM elements עצמאיים - הם נשארים). צורות (קו/פוליגון/מלבן/עיגול) מבוססות GeoJSON source+layer
+// ולכן צריך לשחזר אותן מההיסטוריה הפנימית (drawnFeatures) בכל פעם שה-style מתחלף.
+function reinitializeAfterStyleChange() {
+    setupShapesSourceAndLayers();
+    redrawAllShapesFromState();
 }
 
 // ===== סימון בחירה (select mode) ועדכון Kotlin =====
@@ -432,56 +447,96 @@ var selectMarker = null;
 
 function setMarker(lat, lon) {
     if (selectMarker) {
-        selectMarker.setLatLng([lat, lon]);
+        selectMarker.setLngLat([lon, lat]);
     } else {
-        selectMarker = L.marker([lat, lon]).addTo(map);
+        selectMarker = new maplibregl.Marker({ color: '#3498db' }).setLngLat([lon, lat]).addTo(map);
     }
 }
 
 function centerOnCoordinates(lat, lon) {
     var latNum = parseFloat(lat);
     var lonNum = parseFloat(lon);
-    map.setView([latNum, lonNum], 15);
+    map.flyTo({ center: [lonNum, latNum], zoom: 15 });
     setMarker(latNum, lonNum);
 }
 
 // ===== GPS - מירכוז חד-פעמי ומעקב רציף =====
+var gpsMarkerEl = null;
 var gpsMarker = null;
-var gpsAccuracyCircle = null;
-var gpsIcon = L.divIcon({
-    className: 'gps-marker-icon',
-    html: '<div style="width:16px;height:16px;border-radius:50%;background:#4285F4;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
-    iconSize: [16, 16],
-    iconAnchor: [8, 8]
-});
+var gpsAccuracySourceId = 'gps-accuracy-circle';
+
+function ensureGpsAccuracyLayer() {
+    if (!map.getSource(gpsAccuracySourceId)) {
+        map.addSource(gpsAccuracySourceId, { type: 'geojson', data: emptyFeatureCollection() });
+        map.addLayer({
+            id: gpsAccuracySourceId, type: 'fill', source: gpsAccuracySourceId,
+            paint: { 'fill-color': '#4285F4', 'fill-opacity': 0.12 }
+        });
+        map.addLayer({
+            id: gpsAccuracySourceId + '-outline', type: 'line', source: gpsAccuracySourceId,
+            paint: { 'line-color': '#4285F4', 'line-opacity': 0.4, 'line-width': 1 }
+        });
+    }
+}
 
 function centerOnGps(lat, lon, accuracy) {
     var latNum = parseFloat(lat);
     var lonNum = parseFloat(lon);
-    map.setView([latNum, lonNum], 17);
-    if (gpsMarker) {
-        gpsMarker.setLatLng([latNum, lonNum]);
+    map.flyTo({ center: [lonNum, latNum], zoom: 17 });
+
+    if (!gpsMarkerEl) {
+        gpsMarkerEl = document.createElement('div');
+        gpsMarkerEl.style.width = '16px';
+        gpsMarkerEl.style.height = '16px';
+        gpsMarkerEl.style.borderRadius = '50%';
+        gpsMarkerEl.style.background = '#4285F4';
+        gpsMarkerEl.style.border = '3px solid white';
+        gpsMarkerEl.style.boxShadow = '0 0 4px rgba(0,0,0,0.5)';
+        gpsMarker = new maplibregl.Marker({ element: gpsMarkerEl }).setLngLat([lonNum, latNum]).addTo(map);
     } else {
-        gpsMarker = L.marker([latNum, lonNum], { icon: gpsIcon, interactive: false, zIndexOffset: 500 }).addTo(map);
+        gpsMarker.setLngLat([lonNum, latNum]);
     }
 
-    // מעגל דיוק - מציג ויזואלית את טווח חוסר הוודאות של ה-GPS (כמטר שגוי), כדי שסטייה
-    // נראית תהיה מובנת ולא תיראה כבאג. ה-accuracy מגיע ב-Kotlin מ-Location.getAccuracy().
     if (accuracy !== null && accuracy !== undefined && !isNaN(accuracy)) {
+        ensureGpsAccuracyLayer();
         var accNum = parseFloat(accuracy);
-        if (gpsAccuracyCircle) {
-            gpsAccuracyCircle.setLatLng([latNum, lonNum]);
-            gpsAccuracyCircle.setRadius(accNum);
-        } else {
-            gpsAccuracyCircle = L.circle([latNum, lonNum], {
-                radius: accNum, color: '#4285F4', weight: 1, opacity: 0.4,
-                fillColor: '#4285F4', fillOpacity: 0.12, interactive: false
-            }).addTo(map);
-        }
+        var circlePolygon = makeCirclePolygon(lonNum, latNum, accNum);
+        map.getSource(gpsAccuracySourceId).setData(circlePolygon);
     }
 }
 
-// ===== פתיחה/סגירה של הסרגל הצף-צד (דרישה 4) =====
+/**
+ * מייצר פוליגון מעגלי גיאודטי סביב מרכז נתון, ברדיוס במטרים. משמש גם למעגל הדיוק של ה-GPS
+ * וגם לכלי ה"עיגול" בציור - מאחר ש-GeoJSON אין לו טיפוס גיאומטרי "circle" אמיתי, מקרבים
+ * אותו כפוליגון עם N קודקודים (64 - מספיק חלק ויזואלית, לא כבד מבחינת רינדור).
+ */
+function makeCirclePolygon(centerLon, centerLat, radiusMeters, steps) {
+    steps = steps || 64;
+    var coords = [];
+    var earthRadius = 6378137;
+    var latRad = centerLat * Math.PI / 180;
+
+    for (var i = 0; i <= steps; i++) {
+        var angle = (i / steps) * 2 * Math.PI;
+        var dx = radiusMeters * Math.cos(angle);
+        var dy = radiusMeters * Math.sin(angle);
+        var dLon = (dx / (earthRadius * Math.cos(latRad))) * (180 / Math.PI);
+        var dLat = (dy / earthRadius) * (180 / Math.PI);
+        coords.push([centerLon + dLon, centerLat + dLat]);
+    }
+
+    return {
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'Polygon', coordinates: [coords] }
+    };
+}
+
+function emptyFeatureCollection() {
+    return { type: 'FeatureCollection', features: [] };
+}
+
+// ===== פתיחה/סגירה של הסרגל הצף-צד =====
 var toolbarOpen = false;
 document.getElementById('toolbarToggleBtn').addEventListener('click', function() {
     toolbarOpen = !toolbarOpen;
@@ -489,38 +544,25 @@ document.getElementById('toolbarToggleBtn').addEventListener('click', function()
     if (!toolbarOpen) closeAllPopups();
 });
 
-// ===== מצבי מפה: select (בחירת נקודה) / draw (ציור והוספת אלמנטים) / edit (עריכה/מחיקה) =====
-// דרישה 7: הפרדה מוחלטת בין הקשה על המפה לבחירת נקודה (select) לבין הקשה לצורך
-// הוספה/עריכה של אלמנטים (draw/edit) - map.on('click') מסתכל על currentMode ומפנה
-// את ההקשה לפעולה הנכונה בלבד; אף הקשה לא "דולפת" בין המצבים.
+// ===== מצבי מפה: select (בחירת נקודה) / draw (ציור) / edit (עריכה/מחיקה) =====
 var currentMode = 'select';
+var currentDrawTool = null; // 'marker' | 'text' | 'line' | 'polygon' | 'rectangle' | 'circle'
 
 function setUiMode(mode) {
     currentMode = mode;
+    currentDrawTool = null;
+    cancelInProgressDrawing();
+
     document.querySelectorAll('.toolbar-btn[data-mode]').forEach(function(btn) {
         btn.classList.toggle('active', btn.dataset.mode === mode);
     });
-
-    // מצב draw מפעיל את סרגל L.Control.Draw הטבעי (הכלים המורחבים ביותר: פין, קו,
-    // פוליגון, מלבן, עיגול, ועוד); מצב select/edit משבית אותו
-    if (mode === 'draw') {
-        if (!leafletDrawControl._map) {
-            map.addControl(leafletDrawControl);
-        }
-    } else {
-        if (leafletDrawControl._map) {
-            map.removeControl(leafletDrawControl);
-        }
-    }
 
     if (mode === 'select') {
         document.getElementById('mapHintText').textContent = 'הקש על המפה לבחירת מיקום';
     } else if (mode === 'edit') {
         document.getElementById('mapHintText').textContent = 'הקש על ציור קיים לעריכה או מחיקה';
     } else if (mode === 'draw') {
-        document.getElementById('mapHintText').textContent = 'בחר כלי ציור מהסרגל המורחב למעלה';
-    } else if (mode === 'text-label') {
-        document.getElementById('mapHintText').textContent = 'הקש על המפה למיקום התווית';
+        document.getElementById('mapHintText').textContent = 'בחר כלי ציור מהתפריט';
     }
 }
 
@@ -530,13 +572,8 @@ document.getElementById('btnModeSelect').addEventListener('click', function() {
 });
 
 document.getElementById('btnModeDraw').addEventListener('click', function() {
-    closeAllPopups();
+    togglePopup('drawToolPopup');
     setUiMode('draw');
-});
-
-document.getElementById('btnAddTextLabel').addEventListener('click', function() {
-    closeAllPopups();
-    setUiMode('text-label');
 });
 
 document.getElementById('btnEditShapes').addEventListener('click', function() {
@@ -544,26 +581,34 @@ document.getElementById('btnEditShapes').addEventListener('click', function() {
     setUiMode('edit');
 });
 
-// הקשה על המפה - מתפרשת אך ורק לפי המצב הנוכחי, בלי חפיפה בין select לבין draw/edit
+document.querySelectorAll('#drawToolPopup [data-tool]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        currentDrawTool = btn.dataset.tool;
+        document.querySelectorAll('#drawToolPopup [data-tool]').forEach(function(b) {
+            b.classList.toggle('active', b === btn);
+        });
+        closeAllPopups();
+        startDrawingTool(currentDrawTool);
+    });
+});
+
+// הקשה על המפה - מתפרשת אך ורק לפי המצב הנוכחי
 map.on('click', function(e) {
     if (currentMode === 'select') {
-        var lat = e.latlng.lat.toFixed(6);
-        var lon = e.latlng.lng.toFixed(6);
+        var lat = e.lngLat.lat.toFixed(6);
+        var lon = e.lngLat.lng.toFixed(6);
         setMarker(lat, lon);
         if (window.AndroidBridge) {
             window.AndroidBridge.onMapPointSelected(lat.toString(), lon.toString());
         }
     } else if (currentMode === 'edit') {
-        // הקשה על שטח ריק (לא על ציור קיים) במצב עריכה - רק סוגרת פופאפ עריכה פתוח, לא פועלת על המפה
         closeAllPopups();
-    } else if (currentMode === 'text-label') {
-        placeTextLabelAt(e.latlng);
-        setUiMode('select'); // פעולה חד-פעמית, כמו כלי ה-marker של L.Control.Draw - חוזרים לבחירה אחרי הצבה
+    } else if (currentMode === 'draw' && currentDrawTool) {
+        handleDrawClick(e.lngLat);
     }
-    // במצב draw, ה-L.Control.Draw הטבעי מטפל בהקשות בעצמו דרך ה-handlers הפנימיים שלו
 });
 
-// ===== ניהול תפריטים צצים (popups) - רק אחד פתוח בכל זמן, לא חופפים =====
+// ===== ניהול תפריטים צצים (popups) =====
 function closeAllPopups() {
     document.querySelectorAll('.options-popup').forEach(function(p) { p.classList.remove('visible'); });
 }
@@ -578,19 +623,15 @@ function togglePopup(id) {
 document.getElementById('btnMapStyle').addEventListener('click', function() {
     togglePopup('mapStylePopup');
 });
+document.getElementById('btnStyleStreet').addEventListener('click', function() { switchMapStyle('street'); });
+document.getElementById('btnStyleSatellite').addEventListener('click', function() { switchMapStyle('satellite'); });
 
-document.getElementById('btnStyleStreet').addEventListener('click', function() {
-    switchMapStyle('street');
-});
-document.getElementById('btnStyleSatellite').addEventListener('click', function() {
-    switchMapStyle('satellite');
-});
-
-// ===== הגדרות ברירת מחדל לסימון (marker) - הצבע/גודל/אייקון ההתחלתיים שמוקצים לכל
-// פין חדש שנוצר דרך L.Control.Draw; ניתן לשנות לכל סימון בנפרד דרך מצב "עריכה" =====
+// ===== הגדרות ברירת מחדל לסימונים ותוויות טקסט =====
 var DEFAULT_MARKER_COLOR = '#e74c3c';
 var DEFAULT_MARKER_SIZE = 26;
 var DEFAULT_MARKER_ICON_KEY = 'pin';
+var DEFAULT_TEXT_LABEL_COLOR = '#262320';
+var DEFAULT_TEXT_LABEL_SIZE = 16;
 
 var MARKER_ICON_SVGS = {
     pin: '<path d="M12,2C8.13,2 5,5.13 5,9c0,5.25 7,13 7,13s7,-7.75 7,-13C19,5.13 15.87,2 12,2zM12,11.5c-1.38,0 -2.5,-1.12 -2.5,-2.5s1.12,-2.5 2.5,-2.5 2.5,1.12 2.5,2.5S13.38,11.5 12,11.5z"/>',
@@ -600,159 +641,319 @@ var MARKER_ICON_SVGS = {
     warn: '<path d="M1,21h22L12,2 1,21zM13,18h-2v-2h2v2zM13,14h-2v-4h2v4z"/>'
 };
 
-function makeMarkerDivIcon(size, color, iconKey, text) {
-    var svgPath = MARKER_ICON_SVGS[iconKey] || MARKER_ICON_SVGS.pin;
-    var label = text ? '<div class="pin-label">' + escapeHtml(text) + '</div>' : '';
-    return L.divIcon({
-        className: 'custom-marker-icon',
-        html: '<svg viewBox="0 0 24 24" width="' + size + '" height="' + size + '" fill="' + color +
-              '" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));">' + svgPath + '</svg>' + label,
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size / 2]
-    });
-}
-
 function escapeHtml(text) {
     var div = document.createElement('div');
     div.innerText = text;
     return div.innerHTML;
 }
 
-// ===== תוויות טקסט חופשיות על המפה - בלי פין/אייקון, רק טקסט מעוצב =====
-var DEFAULT_TEXT_LABEL_COLOR = '#262320';
-var DEFAULT_TEXT_LABEL_SIZE = 16;
-
-function makeTextLabelDivIcon(text, color, fontSize) {
-    return L.divIcon({
-        className: 'free-text-label',
-        html: '<div class="free-text-label-inner" style="color:' + color + ';font-size:' + fontSize + 'px;">' +
-              escapeHtml(text) + '</div>',
-        iconSize: null, // גודל אוטומטי לפי תוכן הטקסט, לא ריבוע קבוע
-        iconAnchor: [0, fontSize / 2]
-    });
+function makeMarkerElement(size, color, iconKey, text) {
+    var svgPath = MARKER_ICON_SVGS[iconKey] || MARKER_ICON_SVGS.pin;
+    var label = text ? '<div class="pin-label">' + escapeHtml(text) + '</div>' : '';
+    var wrapper = document.createElement('div');
+    wrapper.className = 'custom-marker-icon';
+    wrapper.style.position = 'relative';
+    wrapper.innerHTML =
+        '<svg viewBox="0 0 24 24" width="' + size + '" height="' + size + '" fill="' + color +
+        '" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));">' + svgPath + '</svg>' + label;
+    return wrapper;
 }
 
-function placeTextLabelAt(latlng) {
-    var text = window.prompt('טקסט התווית:', '') || '';
-    if (!text.trim()) return; // לא מציבים תווית ריקה
+function makeTextLabelElement(text, color, fontSize) {
+    var wrapper = document.createElement('div');
+    wrapper.className = 'free-text-label';
+    wrapper.style.color = color;
+    wrapper.style.fontSize = fontSize + 'px';
+    wrapper.innerText = text;
+    return wrapper;
+}
 
-    var icon = makeTextLabelDivIcon(text, DEFAULT_TEXT_LABEL_COLOR, DEFAULT_TEXT_LABEL_SIZE);
-    var layer = L.marker(latlng, { icon: icon });
-    layer.feature = { properties: {
-        kind: 'text', color: DEFAULT_TEXT_LABEL_COLOR, fontSize: DEFAULT_TEXT_LABEL_SIZE, text: text
-    }};
-    drawnItems.addLayer(layer);
-    attachEditHandler(layer);
+// ===== ניהול ציורים (markers/text כ-maplibregl.Marker; shapes כ-GeoJSON source+layer) =====
+// shapeRegistry: id -> { kind, marker (אם marker/text) | feature properties (אם shape), ... }
+var shapeRegistry = {};
+var nextShapeId = 1;
+var SHAPES_SOURCE_ID = 'drawn-shapes';
+
+function setupShapesSourceAndLayers() {
+    if (map.getSource(SHAPES_SOURCE_ID)) return;
+
+    map.addSource(SHAPES_SOURCE_ID, { type: 'geojson', data: emptyFeatureCollection() });
+
+    // שכבת מילוי (פוליגון/מלבן/עיגול)
+    map.addLayer({
+        id: SHAPES_SOURCE_ID + '-fill', type: 'fill', source: SHAPES_SOURCE_ID,
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: {
+            'fill-color': ['get', 'color'],
+            'fill-opacity': ['*', ['get', 'opacity'], 0.5]
+        }
+    });
+    // שכבת קו (גם למסגרת הפוליגונים וגם לקווים עצמם)
+    map.addLayer({
+        id: SHAPES_SOURCE_ID + '-line', type: 'line', source: SHAPES_SOURCE_ID,
+        paint: {
+            'line-color': ['get', 'color'],
+            'line-opacity': ['get', 'opacity'],
+            'line-width': ['get', 'weight']
+        }
+    });
+
+    map.on('click', SHAPES_SOURCE_ID + '-fill', onShapeLayerClick);
+    map.on('click', SHAPES_SOURCE_ID + '-line', onShapeLayerClick);
+}
+
+function onShapeLayerClick(e) {
+    if (currentMode !== 'edit') return;
+    if (!e.features || e.features.length === 0) return;
+    var feature = e.features[0];
+    var shapeId = feature.properties.shapeId;
+    openEditPopupForShape(shapeId, e.point);
+}
+
+function updateShapesSource() {
+    var features = [];
+    Object.keys(shapeRegistry).forEach(function(id) {
+        var entry = shapeRegistry[id];
+        if (entry.kind === 'marker' || entry.kind === 'text') return; // אלה DOM markers, לא בשכבת ה-GeoJSON
+        features.push(entry.feature);
+    });
+    var collection = { type: 'FeatureCollection', features: features };
+    if (map.getSource(SHAPES_SOURCE_ID)) {
+        map.getSource(SHAPES_SOURCE_ID).setData(collection);
+    }
+}
+
+/** משחזר את כל הציורים (markers, text, shapes) אחרי החלפת style מלאה (setStyle מאפס layers/sources) */
+function redrawAllShapesFromState() {
+    updateShapesSource();
+    // markers/text הם DOM elements עצמאיים מה-style של המפה - הם שורדים setStyle בלי טיפול נוסף
+}
+
+// ===== כלי ציור - התחלה, הקשות במהלך ציור, סיום =====
+var pendingPoints = [];
+var pendingTempSourceId = 'pending-draw-temp';
+
+function startDrawingTool(tool) {
+    pendingPoints = [];
+    if (tool === 'rectangle' || tool === 'circle') {
+        document.getElementById('mapHintText').textContent =
+            tool === 'rectangle' ? 'הקש לפינה הראשונה של המלבן' : 'הקש על מרכז העיגול';
+    } else if (tool === 'marker' || tool === 'text') {
+        document.getElementById('mapHintText').textContent = 'הקש על המפה למיקום';
+    } else {
+        document.getElementById('mapHintText').textContent = 'הקש להוספת נקודות, ולחץ "סיום" לגמר';
+        showFinishDrawButton(tool);
+    }
+}
+
+function cancelInProgressDrawing() {
+    pendingPoints = [];
+    hideFinishDrawButton();
+    clearTempDrawLayer();
+}
+
+function showFinishDrawButton(tool) {
+    var existing = document.getElementById('finishDrawBtn');
+    if (existing) existing.remove();
+
+    var btn = document.createElement('button');
+    btn.id = 'finishDrawBtn';
+    btn.textContent = 'סיום (' + (tool === 'line' ? 'קו' : 'פוליגון') + ')';
+    btn.style.position = 'absolute';
+    btn.style.bottom = '70px';
+    btn.style.left = '50%';
+    btn.style.transform = 'translateX(-50%)';
+    btn.style.zIndex = '1000';
+    btn.style.background = '#27ae60';
+    btn.style.color = '#fff';
+    btn.style.border = 'none';
+    btn.style.borderRadius = '24px';
+    btn.style.padding = '10px 22px';
+    btn.style.fontSize = '14px';
+    btn.style.fontWeight = 'bold';
+    btn.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+    btn.addEventListener('click', function() { finishMultiPointDrawing(tool); });
+    document.body.appendChild(btn);
+}
+
+function hideFinishDrawButton() {
+    var btn = document.getElementById('finishDrawBtn');
+    if (btn) btn.remove();
+}
+
+function clearTempDrawLayer() {
+    if (map.getLayer(pendingTempSourceId + '-line')) map.removeLayer(pendingTempSourceId + '-line');
+    if (map.getSource(pendingTempSourceId)) map.removeSource(pendingTempSourceId);
+}
+
+function updateTempDrawLayer() {
+    if (pendingPoints.length < 2) return;
+    var geo = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: pendingPoints } };
+    if (!map.getSource(pendingTempSourceId)) {
+        map.addSource(pendingTempSourceId, { type: 'geojson', data: geo });
+        map.addLayer({
+            id: pendingTempSourceId + '-line', type: 'line', source: pendingTempSourceId,
+            paint: { 'line-color': '#888888', 'line-dasharray': [2, 2], 'line-width': 2 }
+        });
+    } else {
+        map.getSource(pendingTempSourceId).setData(geo);
+    }
+}
+
+function handleDrawClick(lngLat) {
+    var lonLat = [lngLat.lng, lngLat.lat];
+
+    if (currentDrawTool === 'marker') {
+        promptAndPlaceMarker(lonLat);
+        setUiMode('select');
+    } else if (currentDrawTool === 'text') {
+        promptAndPlaceTextLabel(lonLat);
+        setUiMode('select');
+    } else if (currentDrawTool === 'rectangle') {
+        pendingPoints.push(lonLat);
+        if (pendingPoints.length === 2) {
+            finishRectangleDrawing();
+        } else {
+            document.getElementById('mapHintText').textContent = 'הקש לפינה הנגדית של המלבן';
+        }
+    } else if (currentDrawTool === 'circle') {
+        pendingPoints.push(lonLat);
+        if (pendingPoints.length === 2) {
+            finishCircleDrawing();
+        } else {
+            document.getElementById('mapHintText').textContent = 'הקש להגדרת רדיוס העיגול';
+        }
+    } else if (currentDrawTool === 'line' || currentDrawTool === 'polygon') {
+        pendingPoints.push(lonLat);
+        updateTempDrawLayer();
+        updateLiveMeasure();
+    }
+}
+
+function promptAndPlaceMarker(lonLat) {
+    var text = window.prompt('טקסט לתווית (ניתן להשאיר ריק):', '') || '';
+    var id = 'shape-' + (nextShapeId++);
+    var props = { kind: 'marker', color: DEFAULT_MARKER_COLOR, size: DEFAULT_MARKER_SIZE, iconKey: DEFAULT_MARKER_ICON_KEY, text: text };
+    var el = makeMarkerElement(props.size, props.color, props.iconKey, props.text);
+    var marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lonLat).addTo(map);
+    el.addEventListener('click', function(ev) {
+        if (currentMode === 'edit') {
+            ev.stopPropagation();
+            openEditPopupForMarker(id, ev);
+        }
+    });
+    shapeRegistry[id] = { kind: 'marker', marker: marker, props: props, lonLat: lonLat };
     persistShapes();
 }
 
-// ===== שכבת הציורים =====
-var drawnItems = new L.FeatureGroup().addTo(map);
-
-function attachEditHandler(layer) {
-    layer.on('click', function(e) {
+function promptAndPlaceTextLabel(lonLat) {
+    var text = window.prompt('טקסט התווית:', '') || '';
+    if (!text.trim()) return;
+    var id = 'shape-' + (nextShapeId++);
+    var props = { kind: 'text', color: DEFAULT_TEXT_LABEL_COLOR, fontSize: DEFAULT_TEXT_LABEL_SIZE, text: text };
+    var el = makeTextLabelElement(props.text, props.color, props.fontSize);
+    var marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lonLat).addTo(map);
+    el.addEventListener('click', function(ev) {
         if (currentMode === 'edit') {
-            L.DomEvent.stopPropagation(e);
-            openEditPopupFor(layer, e);
+            ev.stopPropagation();
+            openEditPopupForMarker(id, ev);
         }
     });
+    shapeRegistry[id] = { kind: 'text', marker: marker, props: props, lonLat: lonLat };
+    persistShapes();
 }
 
-// ===== לוקליזציה לעברית של הסרגל הטבעי =====
-L.drawLocal.draw.toolbar.buttons.polyline = 'צייר קו';
-L.drawLocal.draw.toolbar.buttons.polygon = 'צייר פוליגון';
-L.drawLocal.draw.toolbar.buttons.rectangle = 'צייר מלבן';
-L.drawLocal.draw.toolbar.buttons.circle = 'צייר עיגול';
-L.drawLocal.draw.toolbar.buttons.marker = 'הוסף סימון';
-L.drawLocal.draw.toolbar.actions.title = 'בטל ציור';
-L.drawLocal.draw.toolbar.actions.text = 'ביטול';
-L.drawLocal.draw.toolbar.finish.title = 'סיים ציור';
-L.drawLocal.draw.toolbar.finish.text = 'סיום';
-L.drawLocal.draw.toolbar.undo.title = 'מחק נקודה אחרונה';
-L.drawLocal.draw.toolbar.undo.text = 'מחק נקודה';
-L.drawLocal.draw.handlers.polyline.tooltip.start = 'הקש כדי להתחיל לצייר קו.';
-L.drawLocal.draw.handlers.polyline.tooltip.cont = 'הקש כדי להמשיך לצייר קו.';
-L.drawLocal.draw.handlers.polyline.tooltip.end = 'הקש על הנקודה האחרונה כדי לסיים.';
-L.drawLocal.draw.handlers.polygon.tooltip.start = 'הקש כדי להתחיל לצייר פוליגון.';
-L.drawLocal.draw.handlers.polygon.tooltip.cont = 'הקש כדי להמשיך לצייר פוליגון.';
-L.drawLocal.draw.handlers.polygon.tooltip.end = 'הקש על הנקודה הראשונה כדי לסגור את הפוליגון.';
-L.drawLocal.draw.handlers.rectangle.tooltip.start = 'גרור כדי לצייר מלבן.';
-L.drawLocal.draw.handlers.circle.tooltip.start = 'גרור כדי לצייר עיגול.';
-L.drawLocal.draw.handlers.marker.tooltip.start = 'הקש על המפה למיקום הסימון.';
-L.drawLocal.edit.toolbar.buttons.edit = 'ערוך ציורים';
-L.drawLocal.edit.toolbar.buttons.editDisabled = 'אין ציורים לעריכה';
-L.drawLocal.edit.toolbar.buttons.remove = 'מחק ציורים';
-L.drawLocal.edit.toolbar.buttons.removeDisabled = 'אין ציורים למחיקה';
-L.drawLocal.edit.toolbar.actions.save.title = 'שמור שינויים';
-L.drawLocal.edit.toolbar.actions.save.text = 'שמירה';
-L.drawLocal.edit.toolbar.actions.cancel.title = 'בטל עריכה';
-L.drawLocal.edit.toolbar.actions.cancel.text = 'ביטול';
-
-// ===== L.Control.Draw - הסרגל המורחב ביותר שיש ב-Leaflet (דרישה 3): כולל פין, קו,
-// פוליגון, מלבן ועיגול (דרישה 8), בתוספת toolbar העריכה/מחיקה המובנה שמאפשר גם גרירת
-// ידיות לשינוי גודל צורה קיימת (דרישה 5) - הכול native, בלי קוד ציור עצמאי. ===== 
-var leafletDrawControl = new L.Control.Draw({
-    position: 'topleft',
-    draw: {
-        polyline: { shapeOptions: { color: '#3498db', weight: 4 } },
-        polygon: { shapeOptions: { color: '#27ae60', weight: 3, fillOpacity: 0.35 }, allowIntersection: false, showArea: true },
-        rectangle: { shapeOptions: { color: '#e67e22', weight: 3, fillOpacity: 0.35 } },
-        circle: { shapeOptions: { color: '#9b59b6', weight: 3, fillOpacity: 0.35 } },
-        marker: {
-            icon: makeMarkerDivIcon(DEFAULT_MARKER_SIZE, DEFAULT_MARKER_COLOR, DEFAULT_MARKER_ICON_KEY, '')
-        },
-        circlemarker: false // לא נדרש - יש לנו marker רגיל וגם circle מלא
-    },
-    edit: {
-        featureGroup: drawnItems,
-        remove: true
+function finishMultiPointDrawing(tool) {
+    if (tool === 'line' && pendingPoints.length >= 2) {
+        addShape('polyline', pendingPoints.slice(), { color: '#3498db', opacity: 1, weight: 4 });
+    } else if (tool === 'polygon' && pendingPoints.length >= 3) {
+        var closedRing = pendingPoints.slice();
+        closedRing.push(closedRing[0]);
+        addShape('polygon', [closedRing], { color: '#27ae60', opacity: 1, weight: 3 });
     }
-});
-
-map.on(L.Draw.Event.DRAWSTART, function() {
-    document.getElementById('measureReadout').classList.add('visible');
-});
-
-map.on(L.Draw.Event.DRAWSTOP, function() {
     document.getElementById('measureReadout').classList.remove('visible');
-});
+    cancelInProgressDrawing();
+    setUiMode('select');
+}
 
-// מדידה בזמן אמת בעת ציור קו/פוליגון - דרישה 1 בשיחה קודמת, נשמרת גם עם הסרגל המורחב
-map.on(L.Draw.Event.DRAWVERTEX, function(e) {
-    updateLiveMeasure();
-});
+function finishRectangleDrawing() {
+    var p1 = pendingPoints[0], p2 = pendingPoints[1];
+    var minLon = Math.min(p1[0], p2[0]), maxLon = Math.max(p1[0], p2[0]);
+    var minLat = Math.min(p1[1], p2[1]), maxLat = Math.max(p1[1], p2[1]);
+    var ring = [[minLon, minLat], [maxLon, minLat], [maxLon, maxLat], [minLon, maxLat], [minLon, minLat]];
+    addShape('rectangle', [ring], { color: '#e67e22', opacity: 1, weight: 3 });
+    cancelInProgressDrawing();
+    setUiMode('select');
+}
 
+function finishCircleDrawing() {
+    var center = pendingPoints[0], edge = pendingPoints[1];
+    var radiusMeters = haversineDistance(center[1], center[0], edge[1], edge[0]);
+    var id = 'shape-' + (nextShapeId++);
+    var props = { kind: 'circle', color: '#9b59b6', opacity: 1, weight: 3, radius: radiusMeters, center: center };
+    var feature = {
+        type: 'Feature',
+        properties: { shapeId: id, color: props.color, opacity: props.opacity, weight: props.weight },
+        geometry: makeCirclePolygon(center[0], center[1], radiusMeters).geometry
+    };
+    shapeRegistry[id] = { kind: 'circle', props: props, feature: feature };
+    updateShapesSource();
+    persistShapes();
+    cancelInProgressDrawing();
+    setUiMode('select');
+}
+
+function addShape(kind, coordinates, style) {
+    var id = 'shape-' + (nextShapeId++);
+    var geometry = (kind === 'polyline')
+        ? { type: 'LineString', coordinates: coordinates }
+        : { type: 'Polygon', coordinates: coordinates };
+
+    var feature = {
+        type: 'Feature',
+        properties: { shapeId: id, color: style.color, opacity: style.opacity, weight: style.weight },
+        geometry: geometry
+    };
+    shapeRegistry[id] = { kind: kind, props: style, feature: feature };
+    updateShapesSource();
+    persistShapes();
+    return id;
+}
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+    var R = 6378137;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLon = (lon2 - lon1) * Math.PI / 180;
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+// ===== מדידה בזמן אמת (קו/פוליגון) =====
 function updateLiveMeasure() {
     var readout = document.getElementById('measureReadout');
-    var activeHandler = map._toolbars && map._toolbars.draw && map._toolbars.draw._activeMode
-        ? map._toolbars.draw._activeMode.handler
-        : null;
-    if (!activeHandler || !activeHandler._markers || activeHandler._markers.length === 0) return;
-
-    var latlngs = activeHandler._markers.map(function(m) { return m.getLatLng(); });
-
-    if (activeHandler instanceof L.Draw.Polyline && !(activeHandler instanceof L.Draw.Polygon) && latlngs.length >= 2) {
+    if (currentDrawTool === 'line' && pendingPoints.length >= 2) {
         var dist = 0;
-        for (var i = 1; i < latlngs.length; i++) {
-            dist += latlngs[i - 1].distanceTo(latlngs[i]);
+        for (var i = 1; i < pendingPoints.length; i++) {
+            dist += haversineDistance(pendingPoints[i - 1][1], pendingPoints[i - 1][0], pendingPoints[i][1], pendingPoints[i][0]);
         }
         readout.textContent = 'מרחק: ' + formatDistance(dist);
         readout.classList.add('visible');
-    } else if (activeHandler instanceof L.Draw.Polygon && latlngs.length >= 3) {
-        var area = polygonAreaApprox(latlngs);
+    } else if (currentDrawTool === 'polygon' && pendingPoints.length >= 3) {
+        var area = polygonAreaApprox(pendingPoints);
         readout.textContent = 'שטח: ' + formatArea(area);
         readout.classList.add('visible');
     }
 }
 
-function polygonAreaApprox(latlngs) {
-    // נוסחת שטח גיאודטית פשוטה (Shoelace על השלכת מרקטור), מספיק מדויקת לתצוגה בזמן ציור
+function polygonAreaApprox(lonLatPoints) {
     var area = 0;
     var R = 6378137;
-    for (var i = 0; i < latlngs.length; i++) {
-        var p1 = latlngs[i];
-        var p2 = latlngs[(i + 1) % latlngs.length];
-        area += (toRad(p2.lng) - toRad(p1.lng)) * (2 + Math.sin(toRad(p1.lat)) + Math.sin(toRad(p2.lat)));
+    for (var i = 0; i < lonLatPoints.length; i++) {
+        var p1 = lonLatPoints[i];
+        var p2 = lonLatPoints[(i + 1) % lonLatPoints.length];
+        area += (toRad(p2[0]) - toRad(p1[0])) * (2 + Math.sin(toRad(p1[1])) + Math.sin(toRad(p2[1])));
     }
     return Math.abs(area * R * R / 2);
 }
@@ -768,85 +969,46 @@ function formatArea(sqMeters) {
     return Math.round(sqMeters) + ' מ"ר';
 }
 
-map.on(L.Draw.Event.CREATED, function(e) {
-    var layer = e.layer;
-    var kind = e.layerType; // 'polyline' | 'polygon' | 'rectangle' | 'circle' | 'marker'
+// ===== עריכה/מחיקה =====
+var activeEditShapeId = null;
 
-    if (kind === 'marker') {
-        var text = window.prompt('טקסט לתווית (ניתן להשאיר ריק):', '') || '';
-        var icon = makeMarkerDivIcon(DEFAULT_MARKER_SIZE, DEFAULT_MARKER_COLOR, DEFAULT_MARKER_ICON_KEY, text);
-        layer.setIcon(icon);
-        layer.feature = { properties: {
-            kind: 'marker', color: DEFAULT_MARKER_COLOR, size: DEFAULT_MARKER_SIZE,
-            iconKey: DEFAULT_MARKER_ICON_KEY, text: text
-        }};
-        drawnItems.addLayer(layer);
-        attachEditHandler(layer);
-        persistShapes();
-        return;
-    }
+function openEditPopupForMarker(id, domEvent) {
+    activeEditShapeId = id;
+    var entry = shapeRegistry[id];
+    var popup = document.getElementById('editShapePopup') || buildEditPopupElement();
 
-    var style;
-    if (kind === 'polyline') {
-        style = { color: '#3498db', opacity: 1, weight: 4 };
-    } else if (kind === 'circle') {
-        style = { color: '#9b59b6', fillColor: '#9b59b6', opacity: 1, weight: 3, fillOpacity: 0.35 };
-    } else if (kind === 'rectangle') {
-        style = { color: '#e67e22', fillColor: '#e67e22', opacity: 1, weight: 3, fillOpacity: 0.35 };
-    } else {
-        // polygon
-        style = { color: '#27ae60', fillColor: '#27ae60', opacity: 1, weight: 3, fillOpacity: 0.35 };
-    }
+    var rect = map.getCanvas().getBoundingClientRect();
+    var x = (domEvent.clientX || 0) - rect.left;
+    var y = (domEvent.clientY || 0) - rect.top;
+    positionEditPopup(popup, x, y);
 
-    var props = { kind: kind, style: style };
-    if (kind === 'circle') {
-        props.radius = layer.getRadius();
-    }
-    layer.feature = { properties: props };
+    fillEditPopupFields(entry.kind, entry.props);
+    popup.classList.add('visible');
+}
 
-    drawnItems.addLayer(layer);
-    attachEditHandler(layer);
+function openEditPopupForShape(id, point) {
+    activeEditShapeId = id;
+    var entry = shapeRegistry[id];
+    var popup = document.getElementById('editShapePopup') || buildEditPopupElement();
 
-    document.getElementById('measureReadout').classList.remove('visible');
-    persistShapes();
-});
+    positionEditPopup(popup, point.x, point.y);
+    fillEditPopupFields(entry.kind, entry.props);
+    popup.classList.add('visible');
+}
 
-// שמירת רדיוס מעודכן אם המשתמש משנה גודל עיגול בעריכה (גרירת ידית - דרישה 5)
-map.on(L.Draw.Event.EDITED, function(e) {
-    e.layers.eachLayer(function(layer) {
-        if (layer.feature && layer.feature.properties && layer.feature.properties.kind === 'circle' && layer.getRadius) {
-            layer.feature.properties.radius = layer.getRadius();
-        }
-    });
-    persistShapes();
-});
-
-map.on(L.Draw.Event.DELETED, function() {
-    persistShapes();
-});
-
-// ===== עריכה/מחיקה של ציור קיים (פאנל סטייל ליד האלמנט) =====
-var activeEditLayer = null;
-
-function openEditPopupFor(layer, mapEvent) {
-    activeEditLayer = layer;
-    var props = (layer.feature && layer.feature.properties) || {};
-    var popup = document.getElementById('editShapePopup');
-    if (!popup) {
-        popup = buildEditPopupElement();
-    }
-
-    // ממקמים את הפופאפ ליד הציור, אך בתוך גבולות המפה - לא חוסם את הסרגל הימני
-    var point = mapEvent.containerPoint || map.latLngToContainerPoint(layer.getLatLng ? layer.getLatLng() : layer.getBounds().getCenter());
+function positionEditPopup(popup, x, y) {
     var popupWidth = 220;
-    var left = Math.min(Math.max(point.x - popupWidth / 2, 10), map.getSize().x - popupWidth - 10);
-    var top = Math.min(point.y + 20, map.getSize().y - 200);
+    var mapSize = { x: map.getCanvas().clientWidth, y: map.getCanvas().clientHeight };
+    var left = Math.min(Math.max(x - popupWidth / 2, 10), mapSize.x - popupWidth - 10);
+    var top = Math.min(y + 20, mapSize.y - 200);
     popup.style.left = left + 'px';
     popup.style.top = top + 'px';
+}
 
-    var isMarker = props.kind === 'marker';
-    var isText = props.kind === 'text';
+function fillEditPopupFields(kind, props) {
     var opacityRow = document.getElementById('editOpacityRow');
+    var isMarker = kind === 'marker';
+    var isText = kind === 'text';
 
     if (isText) {
         document.getElementById('editColorPicker').value = props.color || '#262320';
@@ -856,18 +1018,16 @@ function openEditPopupFor(layer, mapEvent) {
         document.getElementById('editWeightLabel').textContent = 'גודל טקסט';
         opacityRow.style.display = 'none';
     } else {
-        document.getElementById('editColorPicker').value = isMarker ? (props.color || '#e74c3c') : (props.style.color || '#3498db');
+        document.getElementById('editColorPicker').value = isMarker ? (props.color || '#e74c3c') : (props.color || '#3498db');
         document.getElementById('editWeightSlider').min = isMarker ? 16 : 1;
         document.getElementById('editWeightSlider').max = isMarker ? 48 : 12;
-        document.getElementById('editWeightSlider').value = isMarker ? (props.size || 26) : (props.style.weight || 3);
+        document.getElementById('editWeightSlider').value = isMarker ? (props.size || 26) : (props.weight || 3);
         document.getElementById('editWeightLabel').textContent = isMarker ? 'גודל' : 'עובי קו';
-        document.getElementById('editOpacitySlider').value = isMarker ? 100 : Math.round((props.style.opacity || 1) * 100);
+        document.getElementById('editOpacitySlider').value = isMarker ? 100 : Math.round((props.opacity || 1) * 100);
         document.getElementById('editOpacityVal').textContent = document.getElementById('editOpacitySlider').value + '%';
         opacityRow.style.display = 'flex';
     }
     document.getElementById('editWeightVal').textContent = document.getElementById('editWeightSlider').value;
-
-    popup.classList.add('visible');
 }
 
 function buildEditPopupElement() {
@@ -887,89 +1047,111 @@ function buildEditPopupElement() {
     document.getElementById('editOpacitySlider').addEventListener('input', applyEditChanges);
     document.getElementById('editWeightSlider').addEventListener('input', applyEditChanges);
     document.getElementById('editDeleteBtn').addEventListener('click', function() {
-        if (activeEditLayer) {
-            drawnItems.removeLayer(activeEditLayer);
-            activeEditLayer = null;
+        if (activeEditShapeId) {
+            deleteShape(activeEditShapeId);
+            activeEditShapeId = null;
             popup.classList.remove('visible');
-            persistShapes();
         }
     });
     document.getElementById('editCloseBtn').addEventListener('click', function() {
         popup.classList.remove('visible');
-        activeEditLayer = null;
+        activeEditShapeId = null;
     });
 
     return popup;
 }
 
+function deleteShape(id) {
+    var entry = shapeRegistry[id];
+    if (!entry) return;
+    if (entry.marker) entry.marker.remove();
+    delete shapeRegistry[id];
+    updateShapesSource();
+    persistShapes();
+}
+
 function applyEditChanges() {
-    if (!activeEditLayer) return;
-    var props = activeEditLayer.feature.properties;
+    if (!activeEditShapeId) return;
+    var entry = shapeRegistry[activeEditShapeId];
+    if (!entry) return;
+
     var color = document.getElementById('editColorPicker').value;
     var opacityPct = parseInt(document.getElementById('editOpacitySlider').value);
     var weightVal = parseInt(document.getElementById('editWeightSlider').value);
     document.getElementById('editOpacityVal').textContent = opacityPct + '%';
     document.getElementById('editWeightVal').textContent = weightVal;
 
-    if (props.kind === 'marker') {
-        props.color = color;
-        props.size = weightVal;
-        var icon = makeMarkerDivIcon(props.size, props.color, props.iconKey, props.text);
-        activeEditLayer.setIcon(icon);
-    } else if (props.kind === 'text') {
-        props.color = color;
-        props.fontSize = weightVal;
-        var textIcon = makeTextLabelDivIcon(props.text, props.color, props.fontSize);
-        activeEditLayer.setIcon(textIcon);
-    } else {
-        props.style.color = color;
-        props.style.opacity = opacityPct / 100;
-        props.style.weight = weightVal;
-        var hasFill = (props.kind === 'polygon' || props.kind === 'circle' || props.kind === 'rectangle');
-        activeEditLayer.setStyle({
-            color: color, opacity: opacityPct / 100, weight: weightVal,
-            fillColor: color, fillOpacity: hasFill ? (opacityPct / 100) * 0.5 : undefined
+    if (entry.kind === 'marker') {
+        entry.props.color = color;
+        entry.props.size = weightVal;
+        var newEl = makeMarkerElement(entry.props.size, entry.props.color, entry.props.iconKey, entry.props.text);
+        var id = activeEditShapeId;
+        newEl.addEventListener('click', function(ev) {
+            if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(id, ev); }
         });
+        replaceMarkerElement(entry, newEl);
+    } else if (entry.kind === 'text') {
+        entry.props.color = color;
+        entry.props.fontSize = weightVal;
+        var newTextEl = makeTextLabelElement(entry.props.text, entry.props.color, entry.props.fontSize);
+        var tid = activeEditShapeId;
+        newTextEl.addEventListener('click', function(ev) {
+            if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(tid, ev); }
+        });
+        replaceMarkerElement(entry, newTextEl);
+    } else if (entry.kind === 'circle') {
+        entry.props.color = color;
+        entry.props.opacity = opacityPct / 100;
+        entry.props.weight = weightVal;
+        entry.feature.properties.color = color;
+        entry.feature.properties.opacity = entry.props.opacity;
+        entry.feature.properties.weight = weightVal;
+        entry.feature.geometry = makeCirclePolygon(entry.props.center[0], entry.props.center[1], entry.props.radius).geometry;
+        updateShapesSource();
+    } else {
+        entry.props.color = color;
+        entry.props.opacity = opacityPct / 100;
+        entry.props.weight = weightVal;
+        entry.feature.properties.color = color;
+        entry.feature.properties.opacity = entry.props.opacity;
+        entry.feature.properties.weight = weightVal;
+        updateShapesSource();
     }
     persistShapes();
 }
 
-// ===== שמירה/טעינה =====
-// GeoJSON גנרי לא יכול לייצג עיגול (L.Circle) באופן נאמן - הוא מיוצא כנקודה (Point) שמאבדת
-// את הרדיוס, וגם מלבן (L.Rectangle) חוזר כ-Polygon גנרי שלא נשאר ניתן-לעריכה כמלבן עם ידית
-// שינוי גודל תקנית. לכן בונים פורמט שמירה משלנו (לא GeoJSON תקני) שמשמר את כל הפרטים
-// הנדרשים לשחזור מדויק של כל סוג צורה, ושומרים אותו דרך Kotlin/filesDir.
+function replaceMarkerElement(entry, newEl) {
+    var lonLat = entry.marker.getLngLat();
+    entry.marker.remove();
+    entry.marker = new maplibregl.Marker({ element: newEl, anchor: 'center' }).setLngLat(lonLat).addTo(map);
+}
+
+// ===== שמירה/טעינה - פורמט עצמאי (לא GeoJSON גנרי), נשמר דרך Kotlin/filesDir =====
 function persistShapes() {
     var result = [];
-    drawnItems.eachLayer(function(layer) {
-        var props = (layer.feature && layer.feature.properties) || {};
-        var entry = { kind: props.kind, style: props.style };
+    Object.keys(shapeRegistry).forEach(function(id) {
+        var entry = shapeRegistry[id];
+        var out = { kind: entry.kind };
 
-        if (props.kind === 'marker') {
-            var ll = layer.getLatLng();
-            entry.lat = ll.lat;
-            entry.lon = ll.lng;
-            entry.color = props.color;
-            entry.size = props.size;
-            entry.iconKey = props.iconKey;
-            entry.text = props.text;
-        } else if (props.kind === 'text') {
-            var tl = layer.getLatLng();
-            entry.lat = tl.lat;
-            entry.lon = tl.lng;
-            entry.color = props.color;
-            entry.fontSize = props.fontSize;
-            entry.text = props.text;
-        } else if (props.kind === 'circle') {
-            var c = layer.getLatLng();
-            entry.lat = c.lat;
-            entry.lon = c.lng;
-            entry.radius = layer.getRadius();
+        if (entry.kind === 'marker' || entry.kind === 'text') {
+            var ll = entry.marker.getLngLat();
+            out.lat = ll.lat;
+            out.lon = ll.lng;
+            Object.assign(out, entry.props);
+        } else if (entry.kind === 'circle') {
+            out.lat = entry.props.center[1];
+            out.lon = entry.props.center[0];
+            out.radius = entry.props.radius;
+            out.color = entry.props.color;
+            out.opacity = entry.props.opacity;
+            out.weight = entry.props.weight;
         } else {
-            // polyline, polygon, rectangle - כל אלה נשמרים כרשימת נקודות
-            entry.points = layer.getLatLngs().flat(2).map(function(p) { return [p.lat, p.lng]; });
+            out.coordinates = entry.feature.geometry.coordinates;
+            out.color = entry.props.color;
+            out.opacity = entry.props.opacity;
+            out.weight = entry.props.weight;
         }
-        result.push(entry);
+        result.push(out);
     });
 
     if (window.AndroidBridge && window.AndroidBridge.onShapesChanged) {
@@ -981,51 +1163,52 @@ function loadShapesFromJson(jsonStr) {
     try {
         var shapes = JSON.parse(jsonStr);
         shapes.forEach(function(entry) {
-            var layer;
             if (entry.kind === 'marker') {
-                var icon = makeMarkerDivIcon(entry.size || 26, entry.color || '#e74c3c', entry.iconKey || 'pin', entry.text || '');
-                layer = L.marker([entry.lat, entry.lon], { icon: icon });
-                layer.feature = { properties: {
-                    kind: 'marker', color: entry.color, size: entry.size, iconKey: entry.iconKey, text: entry.text
-                }};
+                var id = 'shape-' + (nextShapeId++);
+                var props = { kind: 'marker', color: entry.color, size: entry.size, iconKey: entry.iconKey, text: entry.text };
+                var el = makeMarkerElement(props.size, props.color, props.iconKey, props.text);
+                el.addEventListener('click', function(ev) {
+                    if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(id, ev); }
+                });
+                var marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([entry.lon, entry.lat]).addTo(map);
+                shapeRegistry[id] = { kind: 'marker', marker: marker, props: props, lonLat: [entry.lon, entry.lat] };
             } else if (entry.kind === 'text') {
-                var textIcon = makeTextLabelDivIcon(entry.text || '', entry.color || '#262320', entry.fontSize || 16);
-                layer = L.marker([entry.lat, entry.lon], { icon: textIcon });
-                layer.feature = { properties: {
-                    kind: 'text', color: entry.color, fontSize: entry.fontSize, text: entry.text
-                }};
+                var tid = 'shape-' + (nextShapeId++);
+                var tprops = { kind: 'text', color: entry.color, fontSize: entry.fontSize, text: entry.text };
+                var tel = makeTextLabelElement(tprops.text, tprops.color, tprops.fontSize);
+                tel.addEventListener('click', function(ev) {
+                    if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(tid, ev); }
+                });
+                var tmarker = new maplibregl.Marker({ element: tel, anchor: 'center' }).setLngLat([entry.lon, entry.lat]).addTo(map);
+                shapeRegistry[tid] = { kind: 'text', marker: tmarker, props: tprops, lonLat: [entry.lon, entry.lat] };
             } else if (entry.kind === 'circle') {
-                layer = L.circle([entry.lat, entry.lon], buildLeafletStyleOptions(entry.style, true));
-                layer.setRadius(entry.radius);
-                layer.feature = { properties: { kind: 'circle', style: entry.style, radius: entry.radius } };
-            } else if (entry.kind === 'rectangle') {
-                var bounds = L.latLngBounds(entry.points.map(function(p) { return L.latLng(p[0], p[1]); }));
-                layer = L.rectangle(bounds, buildLeafletStyleOptions(entry.style, true));
-                layer.feature = { properties: { kind: 'rectangle', style: entry.style } };
-            } else if (entry.kind === 'polygon') {
-                layer = L.polygon(entry.points, buildLeafletStyleOptions(entry.style, true));
-                layer.feature = { properties: { kind: 'polygon', style: entry.style } };
+                var cid = 'shape-' + (nextShapeId++);
+                var cprops = { color: entry.color, opacity: entry.opacity, weight: entry.weight, radius: entry.radius, center: [entry.lon, entry.lat] };
+                var cfeature = {
+                    type: 'Feature',
+                    properties: { shapeId: cid, color: cprops.color, opacity: cprops.opacity, weight: cprops.weight },
+                    geometry: makeCirclePolygon(entry.lon, entry.lat, entry.radius).geometry
+                };
+                shapeRegistry[cid] = { kind: 'circle', props: cprops, feature: cfeature };
             } else {
-                // polyline
-                layer = L.polyline(entry.points, buildLeafletStyleOptions(entry.style, false));
-                layer.feature = { properties: { kind: 'polyline', style: entry.style } };
+                // polyline / polygon / rectangle - כולם נשמרים עם coordinates גולמיים בפורמט GeoJSON
+                var sid = 'shape-' + (nextShapeId++);
+                var sprops = { color: entry.color, opacity: entry.opacity, weight: entry.weight };
+                var geometry = (entry.kind === 'polyline')
+                    ? { type: 'LineString', coordinates: entry.coordinates }
+                    : { type: 'Polygon', coordinates: entry.coordinates };
+                var sfeature = {
+                    type: 'Feature',
+                    properties: { shapeId: sid, color: sprops.color, opacity: sprops.opacity, weight: sprops.weight },
+                    geometry: geometry
+                };
+                shapeRegistry[sid] = { kind: entry.kind, props: sprops, feature: sfeature };
             }
-            drawnItems.addLayer(layer);
-            attachEditHandler(layer);
         });
+        updateShapesSource();
     } catch (e) {
         console.error('Failed to load saved shapes', e);
     }
-}
-
-function buildLeafletStyleOptions(style, hasFill) {
-    var s = style || { color: '#3498db', opacity: 1, weight: 3 };
-    var options = { color: s.color, opacity: s.opacity, weight: s.weight };
-    if (hasFill) {
-        options.fillColor = s.fillColor || s.color;
-        options.fillOpacity = (s.opacity || 1) * 0.5;
-    }
-    return options;
 }
 
 // ===== חיפוש כתובת (Nominatim) =====
@@ -1037,7 +1220,7 @@ function searchAddress(query) {
             if (results && results.length > 0) {
                 var lat = parseFloat(results[0].lat);
                 var lon = parseFloat(results[0].lon);
-                map.setView([lat, lon], 16);
+                map.flyTo({ center: [lon, lat], zoom: 16 });
                 setMarker(lat, lon);
                 if (window.AndroidBridge && window.AndroidBridge.onAddressSearchResult) {
                     window.AndroidBridge.onAddressSearchResult(true, lat.toFixed(6), lon.toFixed(6), results[0].display_name || '');
@@ -1070,26 +1253,21 @@ document.getElementById('btnGpsCenter').addEventListener('click', function() {
         window.AndroidBridge.onRequestGpsCenter();
     }
 });
-
 document.getElementById('btnGpsFollow').addEventListener('click', function() {
     if (window.AndroidBridge && window.AndroidBridge.onToggleGpsFollow) {
         window.AndroidBridge.onToggleGpsFollow();
     }
 });
-
 function setGpsFollowUiState(active) {
     var btn = document.getElementById('btnGpsFollow');
     btn.classList.toggle('gps-follow-on', active);
     btn.classList.toggle('gps-follow-off', !active);
 }
 
-// ===== מצב מוטמע/מורחב - שולט אם UI מתקדם (סרגל כלים, חיפוש, GPS, רמזים) מוצג.
-// במצב מוטמע (false) מוצגת רק מפה נקייה עם סמן בחירה (select); במצב מורחב (true)
-// מוצגים כל הכלים המלאים. נקרא מ-Kotlin בכל הרחבה/כיווץ של המפה. =====
+// ===== מצב מוטמע/מורחב =====
 function setEmbeddedChromeVisible(showFullChrome) {
     document.body.classList.toggle('embedded-mode', !showFullChrome);
     if (!showFullChrome) {
-        // בכניסה למצב מוטמע - מחזירים תמיד למצב בחירה נקי, סוגרים כל תפריט/ציור פתוח
         setUiMode('select');
         closeAllPopups();
         if (toolbarOpen) {
@@ -1097,14 +1275,19 @@ function setEmbeddedChromeVisible(showFullChrome) {
             document.getElementById('mainToolbar').classList.remove('open');
         }
     }
+    // MapLibre צריך resize מפורש אחרי שינוי גודל/visibility של ה-container שלו
+    // (להבדיל מ-Leaflet שמטפל בזה אוטומטית בחלק מהמקרים)
+    setTimeout(function() { map.resize(); }, 50);
 }
 
-// ===== מצב צילום נקי - נקרא מ-Kotlin רגע לפני captureMapSnapshot() ורגע אחריו =====
 function setCleanCaptureMode(enabled) {
     document.body.classList.toggle('clean-capture-mode', enabled);
 }
 
-setUiMode('select');
+map.on('load', function() {
+    setupShapesSourceAndLayers();
+    setUiMode('select');
+});
 // [END: MapLogic]
 
 </script>
