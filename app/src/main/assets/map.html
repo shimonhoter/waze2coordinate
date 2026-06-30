@@ -914,6 +914,7 @@ function showVertexHandlesFor(shapeId) {
             entry.props.center = newLngLat;
             entry.feature.geometry = makeCirclePolygon(newLngLat[0], newLngLat[1], entry.props.radius).geometry;
             updateShapesSource();
+            refreshElementLabelForGeometryChange(shapeId);
         });
         // ידית רדיוס - נקודה על הקצה המזרחי של המעגל, גרירתה משנה את הרדיוס
         var edgePoint = destinationPoint(entry.props.center, entry.props.radius, 90);
@@ -922,6 +923,7 @@ function showVertexHandlesFor(shapeId) {
             entry.props.radius = newRadius;
             entry.feature.geometry = makeCirclePolygon(entry.props.center[0], entry.props.center[1], newRadius).geometry;
             updateShapesSource();
+            refreshElementLabelForGeometryChange(shapeId);
         }, '#e74c3c');
     } else {
         var coords = (entry.kind === 'polyline') ? entry.feature.geometry.coordinates : entry.feature.geometry.coordinates[0];
@@ -937,6 +939,7 @@ function showVertexHandlesFor(shapeId) {
                     if (index === 0) ring[ring.length - 1] = newLngLat;
                 }
                 updateShapesSource();
+                refreshElementLabelForGeometryChange(shapeId);
                 persistShapes();
             });
         });
@@ -1109,6 +1112,15 @@ function setupMarkerDragBehavior(marker, id) {
         if (currentMode !== 'edit') {
             // לא במצב עריכה - לא מאפשרים גרירה בפועל (מחזירים את המרקר במקום מיד ב-dragend)
             marker._wasBlockedDrag = true;
+        }
+    });
+    marker.on('drag', function() {
+        if (marker._wasBlockedDrag) return;
+        var entry = shapeRegistry[id];
+        if (entry) {
+            var ll = marker.getLngLat();
+            entry.lonLat = [ll.lng, ll.lat];
+            refreshElementLabelForGeometryChange(id);
         }
     });
     marker.on('dragend', function() {
@@ -1317,7 +1329,7 @@ function openEditPopupForMarker(id, domEvent) {
     var y = (domEvent.clientY || 0) - rect.top;
     positionEditPopup(popup, x, y);
 
-    fillEditPopupFields(entry.kind, entry.props);
+    fillEditPopupFields(entry);
     popup.classList.add('visible');
 }
 
@@ -1327,7 +1339,7 @@ function openEditPopupForShape(id, point) {
     var popup = document.getElementById('editShapePopup') || buildEditPopupElement();
 
     positionEditPopup(popup, point.x, point.y);
-    fillEditPopupFields(entry.kind, entry.props);
+    fillEditPopupFields(entry);
     popup.classList.add('visible');
 }
 
@@ -1340,7 +1352,9 @@ function positionEditPopup(popup, x, y) {
     popup.style.top = top + 'px';
 }
 
-function fillEditPopupFields(kind, props) {
+function fillEditPopupFields(entry) {
+    var kind = entry.kind;
+    var props = entry.props;
     var opacityRow = document.getElementById('editOpacityRow');
     var isMarker = kind === 'marker';
     var isText = kind === 'text';
@@ -1363,6 +1377,12 @@ function fillEditPopupFields(kind, props) {
         opacityRow.style.display = 'flex';
     }
     document.getElementById('editWeightVal').textContent = document.getElementById('editWeightSlider').value;
+
+    // שדה שם + טוגלים, ממוזגים ישירות לתוך פופאפ הסטייל (לחיצה אחת על האלמנט מספיקה
+    // כדי גם לערוך סטייל וגם לשנות שם/תצוגת תוויות, בלי פופאפ נפרד)
+    document.getElementById('editNameInput').value = entry.name || '';
+    document.getElementById('editShowNameCheckbox').checked = !!entry.showName;
+    document.getElementById('editShowCoordsCheckbox').checked = !!entry.showCoords;
 }
 
 // ===== פופאפ פרטי אלמנט - נפתח אחרי כל יצירת ציור: שם + טוגלים לתצוגת שם/קואורדינטות
@@ -1418,7 +1438,9 @@ function buildElementDetailsPopupElement() {
 // ===== תווית שם/קואורדינטות אופציונלית מעל כל אלמנט - DOM marker נפרד, לא חלק
 // מגוף הציור עצמו (כי גם לצורות עם שטח/קו יש תווית מעל המרכז, לא רק לפינים). ניתנת
 // לגרירה במצב עריכה (entry.labelLngLat שומר את המיקום הנפרד שלה - לא חוזר אוטומטית
-// למרכז הצורה בכל רינדור, כדי שאפשר יהיה להזיז אותה הצידה ולא לחפוף את הצורה עצמה) =====
+// למרכז הצורה בכל רינדור, כדי שאפשר יהיה להזיז אותה הצידה ולא לחפוף את הצורה עצמה).
+// entry._lastKnownCenter עוקב אחרי המרכז האחרון הידוע, כדי שכאשר האלמנט זז (לא רק
+// משתנה גודל) נוכל להזיז את התווית באותו הפרש בדיוק - שומר על המיקום היחסי שלה. =====
 var elementLabelMarkers = {};
 
 function updateElementLabelOverlay(id) {
@@ -1427,16 +1449,28 @@ function updateElementLabelOverlay(id) {
         delete elementLabelMarkers[id];
     }
     var entry = shapeRegistry[id];
-    if (!entry || (!entry.showName && !entry.showCoords)) return;
+    if (!entry) return;
+
+    var trueCenter = computeShapeCenter(entry);
+    entry._lastKnownCenter = trueCenter;
+
+    if (!entry.showName && !entry.showCoords) return;
 
     // אם עדיין אין מיקום שמור לתווית (למשל בפעם הראשונה שמפעילים תצוגה) - מתחילים
     // ממרכז הצורה כברירת מחדל, אבל מאותו רגע זה הופך להיות מיקום עצמאי שניתן לגרור
     if (!entry.labelLngLat) {
-        entry.labelLngLat = computeShapeCenter(entry);
+        entry.labelLngLat = [trueCenter[0], trueCenter[1]];
     }
-    var labelPos = entry.labelLngLat;
-    var trueCenter = computeShapeCenter(entry);
 
+    var container = buildElementLabelContent(entry, trueCenter);
+    var labelMarker = new maplibregl.Marker({ element: container, anchor: 'top', draggable: true })
+        .setLngLat(entry.labelLngLat)
+        .addTo(map);
+    setupLabelDragBehavior(labelMarker, id);
+    elementLabelMarkers[id] = labelMarker;
+}
+
+function buildElementLabelContent(entry, trueCenter) {
     var container = document.createElement('div');
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
@@ -1456,10 +1490,42 @@ function updateElementLabelOverlay(id) {
         coordsEl.innerText = trueCenter[1].toFixed(5) + ', ' + trueCenter[0].toFixed(5);
         container.appendChild(coordsEl);
     }
+    return container;
+}
 
-    var labelMarker = new maplibregl.Marker({ element: container, anchor: 'top', draggable: true }).setLngLat(labelPos).addTo(map);
-    setupLabelDragBehavior(labelMarker, id);
-    elementLabelMarkers[id] = labelMarker;
+/**
+ * נקרא מכל גרירה שמשנה את הגיאומטריה של אלמנט (ידיות vertex, גרירת מרכז עיגול, גרירת
+ * פין/תווית-טקסט עצמם) - דרישה 1+2: מעדכן את טקסט הקואורדינטות מידית לערך החדש, ואם
+ * האלמנט "זז" (לא רק שינה צורה/גודל במקום) - מזיז את תווית השם/הקואורדינטות באותו
+ * הפרש בדיוק, כך שהיא שומרת על מיקומה היחסי לאלמנט כפי שהיה לפני ההזזה.
+ * לא בונה מחדש את כל ה-DOM של התווית (כדי לא לגרום לקפיצות/הבהוב בזמן גרירה רציפה) -
+ * רק מזיז את ה-marker הקיים ומעדכן את תוכן הטקסט שבתוכו במקום.
+ */
+function refreshElementLabelForGeometryChange(id) {
+    var entry = shapeRegistry[id];
+    if (!entry) return;
+
+    var newCenter = computeShapeCenter(entry);
+    var oldCenter = entry._lastKnownCenter || newCenter;
+    var deltaLon = newCenter[0] - oldCenter[0];
+    var deltaLat = newCenter[1] - oldCenter[1];
+    entry._lastKnownCenter = newCenter;
+
+    var labelMarker = elementLabelMarkers[id];
+    if (!labelMarker) return; // אין תווית מוצגת כרגע - אין מה לעדכן
+
+    if (entry.labelLngLat && (deltaLon !== 0 || deltaLat !== 0)) {
+        entry.labelLngLat = [entry.labelLngLat[0] + deltaLon, entry.labelLngLat[1] + deltaLat];
+        labelMarker.setLngLat(entry.labelLngLat);
+    }
+
+    // עדכון טקסט הקואורדינטות בלבד (אם מוצג), בלי לבנות מחדש את כל אלמנט ה-DOM
+    if (entry.showCoords) {
+        var coordsEl = labelMarker.getElement().querySelector('.element-label-coords');
+        if (coordsEl) {
+            coordsEl.innerText = newCenter[1].toFixed(5) + ', ' + newCenter[0].toFixed(5);
+        }
+    }
 }
 
 /**
@@ -1493,21 +1559,21 @@ function buildEditPopupElement() {
     popup.style.right = 'auto';
     popup.innerHTML =
         '<div class="popup-title">עריכת ציור</div>' +
+        '<input type="text" id="editNameInput" placeholder="שם האלמנט (אופציונלי)" />' +
+        '<div class="checkbox-row"><input type="checkbox" id="editShowNameCheckbox"/><label for="editShowNameCheckbox">הצג שם על המפה</label></div>' +
+        '<div class="checkbox-row"><input type="checkbox" id="editShowCoordsCheckbox"/><label for="editShowCoordsCheckbox">הצג קואורדינטות מרכז על המפה</label></div>' +
         '<div class="option-row"><label>צבע</label><input type="color" id="editColorPicker"/></div>' +
         '<div class="option-row" id="editOpacityRow"><label>שקיפות</label><input type="range" id="editOpacitySlider" min="10" max="100"/><span class="val" id="editOpacityVal"></span></div>' +
         '<div class="option-row"><label id="editWeightLabel">עובי</label><input type="range" id="editWeightSlider" min="1" max="48"/><span class="val" id="editWeightVal"></span></div>' +
-        '<div class="popup-actions"><button class="btn-delete" id="editDeleteBtn">מחק</button><button class="btn-done" id="editNameBtn" style="background:#7f8c8d;">שם</button><button class="btn-done" id="editCloseBtn">סגור</button></div>';
+        '<div class="popup-actions"><button class="btn-delete" id="editDeleteBtn">מחק</button><button class="btn-done" id="editCloseBtn">סגור</button></div>';
     document.body.appendChild(popup);
 
     document.getElementById('editColorPicker').addEventListener('input', applyEditChanges);
     document.getElementById('editOpacitySlider').addEventListener('input', applyEditChanges);
     document.getElementById('editWeightSlider').addEventListener('input', applyEditChanges);
-    document.getElementById('editNameBtn').addEventListener('click', function() {
-        if (activeEditShapeId) {
-            popup.classList.remove('visible');
-            showElementDetailsPopup(activeEditShapeId);
-        }
-    });
+    document.getElementById('editNameInput').addEventListener('input', applyEditChanges);
+    document.getElementById('editShowNameCheckbox').addEventListener('change', applyEditChanges);
+    document.getElementById('editShowCoordsCheckbox').addEventListener('change', applyEditChanges);
     document.getElementById('editDeleteBtn').addEventListener('click', function() {
         if (activeEditShapeId) {
             var shapeIdToDelete = activeEditShapeId;
@@ -1554,6 +1620,11 @@ function applyEditChanges() {
     document.getElementById('editOpacityVal').textContent = opacityPct + '%';
     document.getElementById('editWeightVal').textContent = weightVal;
 
+    // שם + טוגלי תצוגה - משותפים לכל סוגי האלמנטים, ממוזגים לתוך אותו פופאפ סטייל
+    entry.name = document.getElementById('editNameInput').value.trim();
+    entry.showName = document.getElementById('editShowNameCheckbox').checked;
+    entry.showCoords = document.getElementById('editShowCoordsCheckbox').checked;
+
     if (entry.kind === 'marker') {
         entry.props.color = color;
         entry.props.size = weightVal;
@@ -1590,6 +1661,7 @@ function applyEditChanges() {
         entry.feature.properties.weight = weightVal;
         updateShapesSource();
     }
+    updateElementLabelOverlay(activeEditShapeId);
     persistShapes();
 }
 

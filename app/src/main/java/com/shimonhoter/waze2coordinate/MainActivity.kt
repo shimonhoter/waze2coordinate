@@ -16,6 +16,7 @@ import android.view.MotionEvent
 import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.graphics.Rect
 import android.webkit.JavascriptInterface
 import android.widget.FrameLayout
@@ -95,6 +96,7 @@ class MainActivity : AppCompatActivity() {
 
         setupMapWebView()
         setupMapResizeHandle()
+        applyAdaptiveInitialMapHeight()
 
         binding.btnExpandMap.setOnClickListener { expandMap() }
         binding.btnCollapseMap.setOnClickListener { collapseMap() }
@@ -260,6 +262,44 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             null
         }
+    }
+
+    /**
+     * בפתיחת האפליקציה, מחשב את הגובה ההתחלתי של אזור המפה כך שהקצה התחתון שלו
+     * (כולל ידית הגרירה) יגיע בדיוק לקצה התחתון של המסך הזמין - מחושב דינמית לפי
+     * המיקום בפועל של ה-container על המסך (תלוי בגודל הכותרת/כרטיס ההמרה שמעליו,
+     * שמשתנה ממכשיר למכשיר), ולא לפי ערך dp קבוע מראש.
+     * משתמש ב-ViewTreeObserver כדי לחכות ל-layout pass הראשון, שרק בו יש מימדים
+     * אמיתיים על המסך לעבוד איתם.
+     */
+    private fun applyAdaptiveInitialMapHeight() {
+        binding.embeddedMapContainer.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                binding.embeddedMapContainer.viewTreeObserver.removeOnGlobalLayoutListener(this)
+
+                val location = IntArray(2)
+                binding.embeddedMapContainer.getLocationOnScreen(location)
+                val containerTopY = location[1]
+
+                val screenHeight = resources.displayMetrics.heightPixels
+                val resizeHandleHeightPx = binding.mapResizeHandle.height.takeIf { it > 0 }
+                    ?: (22 * resources.displayMetrics.density).toInt()
+
+                // שוליים ביטחון קטנים מתחת (ניווט המערכת/בארים שקופים) - לא קריטי אם
+                // המכשיר מציג insets, אבל מונע שהמפה "תיחתך" ממש בקצה הפיזי של המסך
+                val bottomSafetyMarginPx = (8 * resources.displayMetrics.density).toInt()
+
+                val availableHeight = screenHeight - containerTopY - resizeHandleHeightPx - bottomSafetyMarginPx
+                val minHeightPx = (120 * resources.displayMetrics.density).toInt()
+                val maxHeightPx = (resources.displayMetrics.heightPixels * 0.85).toInt()
+                val targetHeight = availableHeight.coerceIn(minHeightPx, maxHeightPx)
+
+                val params = binding.embeddedMapContainer.layoutParams
+                params.height = targetHeight
+                binding.embeddedMapContainer.layoutParams = params
+                embeddedMapHeightPx = targetHeight
+            }
+        })
     }
 
     /**
