@@ -117,6 +117,36 @@
         .options-popup .btn-done { background: #3498db; color: white; }
         .options-popup .btn-delete { background: #e74c3c; color: white; }
 
+        /* חלון אישור מחיקה - custom modal, לא window.confirm() (לא נתמך ב-WebView ללא
+           WebChromeClient.onJsConfirm נוסף שלא קיים כרגע - בונים את זה ב-HTML/JS עצמאי
+           כדי לא להוסיף עוד תלות ב-bridge הנייטיבי, ובהתאמה לשאר חלונות ה-popup באפליקציה) */
+        .confirm-modal-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.45);
+            z-index: 1300;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .confirm-modal-overlay.visible { display: flex; }
+        .confirm-modal-box {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 18px;
+            width: min(280px, 80vw);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            direction: rtl;
+            text-align: center;
+        }
+        .confirm-modal-box .confirm-message { font-size: 14px; color: #2c3e50; margin-bottom: 16px; }
+        .confirm-modal-box .confirm-actions { display: flex; gap: 8px; }
+        .confirm-modal-box .confirm-actions button {
+            flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: pointer;
+        }
+        .confirm-modal-box .btn-confirm-yes { background: #e74c3c; color: #fff; }
+        .confirm-modal-box .btn-confirm-no { background: #f0f0f0; color: #2c3e50; }
+
         /* תפריט בחירת כלי ציור - מציג ב-popup קבוע (אין L.Control.Draw מקביל ב-MapLibre,
            לכן בונים בחירת-כלי עצמאית: פין, טקסט, קו, פוליגון, מלבן, עיגול) */
         .draw-tool-list { display: flex; flex-direction: column; gap: 4px; }
@@ -186,13 +216,30 @@
             border: none; background: none; font-size: 18px; cursor: pointer; color: #888; padding: 0 4px;
         }
         .element-list-panel .element-row {
-            display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer;
+            display: flex; align-items: center; gap: 8px; padding: 10px 14px;
             border-bottom: 1px solid #f5f5f5;
         }
-        .element-list-panel .element-row:active { background: #f8f9fa; }
+        .element-list-panel .element-row-info {
+            display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer;
+        }
+        .element-list-panel .element-row-info:active { opacity: 0.6; }
         .element-list-panel .element-row svg { width: 18px; height: 18px; flex-shrink: 0; color: #555; }
-        .element-list-panel .element-row .element-name { font-size: 13px; color: #2c3e50; }
+        .element-list-panel .element-row .element-name {
+            font-size: 13px; color: #2c3e50; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
         .element-list-panel .element-row .element-type { font-size: 11px; color: #999; }
+        .element-list-panel .element-row-controls {
+            display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+        }
+        .element-list-panel .row-checkbox-group {
+            display: flex; flex-direction: column; align-items: center; gap: 1px;
+        }
+        .element-list-panel .row-checkbox-group input[type=checkbox] { width: 15px; height: 15px; }
+        .element-list-panel .row-checkbox-group label { font-size: 9px; color: #888; }
+        .element-list-panel .row-delete-btn {
+            border: none; background: none; color: #e74c3c; cursor: pointer; padding: 4px;
+        }
+        .element-list-panel .row-delete-btn svg { width: 18px; height: 18px; color: #e74c3c; }
         .element-list-panel .empty-state { padding: 20px; text-align: center; color: #999; font-size: 13px; }
 
         .measure-readout {
@@ -453,10 +500,22 @@
 
 <div class="measure-readout" id="measureReadout"></div>
 
+<div class="confirm-modal-overlay" id="confirmModalOverlay">
+    <div class="confirm-modal-box">
+        <div class="confirm-message" id="confirmModalMessage"></div>
+        <div class="confirm-actions">
+            <button class="btn-confirm-no" id="confirmModalCancelBtn">ביטול</button>
+            <button class="btn-confirm-yes" id="confirmModalYesBtn">מחק</button>
+        </div>
+    </div>
+</div>
 <div class="element-list-panel" id="elementListPanel">
     <div class="panel-header">
         <span>אלמנטים על המפה</span>
-        <button id="closeElementListBtn">&times;</button>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <button id="deleteAllElementsBtn" style="font-size:12px; color:#e74c3c; background:none; border:none; cursor:pointer;">מחק הכל</button>
+            <button id="closeElementListBtn">&times;</button>
+        </div>
     </div>
     <div id="elementListBody"></div>
 </div>
@@ -1357,7 +1416,9 @@ function buildElementDetailsPopupElement() {
 }
 
 // ===== תווית שם/קואורדינטות אופציונלית מעל כל אלמנט - DOM marker נפרד, לא חלק
-// מגוף הציור עצמו (כי גם לצורות עם שטח/קו יש תווית מעל המרכז, לא רק לפינים) =====
+// מגוף הציור עצמו (כי גם לצורות עם שטח/קו יש תווית מעל המרכז, לא רק לפינים). ניתנת
+// לגרירה במצב עריכה (entry.labelLngLat שומר את המיקום הנפרד שלה - לא חוזר אוטומטית
+// למרכז הצורה בכל רינדור, כדי שאפשר יהיה להזיז אותה הצידה ולא לחפוף את הצורה עצמה) =====
 var elementLabelMarkers = {};
 
 function updateElementLabelOverlay(id) {
@@ -1368,12 +1429,18 @@ function updateElementLabelOverlay(id) {
     var entry = shapeRegistry[id];
     if (!entry || (!entry.showName && !entry.showCoords)) return;
 
-    var center = computeShapeCenter(entry);
+    // אם עדיין אין מיקום שמור לתווית (למשל בפעם הראשונה שמפעילים תצוגה) - מתחילים
+    // ממרכז הצורה כברירת מחדל, אבל מאותו רגע זה הופך להיות מיקום עצמאי שניתן לגרור
+    if (!entry.labelLngLat) {
+        entry.labelLngLat = computeShapeCenter(entry);
+    }
+    var labelPos = entry.labelLngLat;
+    var trueCenter = computeShapeCenter(entry);
+
     var container = document.createElement('div');
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
     container.style.alignItems = 'center';
-    container.style.pointerEvents = 'none';
 
     if (entry.showName && entry.name) {
         var nameEl = document.createElement('div');
@@ -1384,12 +1451,39 @@ function updateElementLabelOverlay(id) {
     if (entry.showCoords) {
         var coordsEl = document.createElement('div');
         coordsEl.className = 'element-label-coords';
-        coordsEl.innerText = center[1].toFixed(5) + ', ' + center[0].toFixed(5);
+        // הקואורדינטות המוצגות הן תמיד של מרכז האלמנט האמיתי (trueCenter), גם אם
+        // התווית עצמה נגררה למקום אחר - היא רק "מצביעה" על המידע, לא מזיזה אותו
+        coordsEl.innerText = trueCenter[1].toFixed(5) + ', ' + trueCenter[0].toFixed(5);
         container.appendChild(coordsEl);
     }
 
-    var labelMarker = new maplibregl.Marker({ element: container, anchor: 'top' }).setLngLat(center).addTo(map);
+    var labelMarker = new maplibregl.Marker({ element: container, anchor: 'top', draggable: true }).setLngLat(labelPos).addTo(map);
+    setupLabelDragBehavior(labelMarker, id);
     elementLabelMarkers[id] = labelMarker;
+}
+
+/**
+ * מאפשר גרירת תווית השם/קואורדינטות באופן עצמאי מהצורה עצמה - רק במצב "עריכה",
+ * באותו דפוס בדיוק כמו setupMarkerDragBehavior לסימונים רגילים (חוסם גרירה בפועל
+ * אם המצב הנוכחי אינו edit, ומחזיר את התווית למקומה הקודם).
+ */
+function setupLabelDragBehavior(labelMarker, id) {
+    labelMarker.on('dragstart', function() {
+        if (currentMode !== 'edit') {
+            labelMarker._wasBlockedDrag = true;
+        }
+    });
+    labelMarker.on('dragend', function() {
+        var entry = shapeRegistry[id];
+        if (labelMarker._wasBlockedDrag) {
+            labelMarker._wasBlockedDrag = false;
+            if (entry && entry.labelLngLat) labelMarker.setLngLat(entry.labelLngLat);
+            return;
+        }
+        var ll = labelMarker.getLngLat();
+        if (entry) entry.labelLngLat = [ll.lng, ll.lat];
+        persistShapes();
+    });
 }
 
 function buildEditPopupElement() {
@@ -1416,10 +1510,15 @@ function buildEditPopupElement() {
     });
     document.getElementById('editDeleteBtn').addEventListener('click', function() {
         if (activeEditShapeId) {
-            deleteShape(activeEditShapeId);
-            activeEditShapeId = null;
+            var shapeIdToDelete = activeEditShapeId;
+            var entry = shapeRegistry[shapeIdToDelete];
+            var displayName = (entry && (entry.name || genericNameFor(entry.kind))) || 'האלמנט';
             popup.classList.remove('visible');
-            clearVertexHandles();
+            showConfirmModal('למחוק את "' + displayName + '"? לא ניתן לבטל פעולה זו.', function() {
+                deleteShape(shapeIdToDelete);
+                activeEditShapeId = null;
+                clearVertexHandles();
+            });
         }
     });
     document.getElementById('editCloseBtn').addEventListener('click', function() {
@@ -1507,7 +1606,11 @@ function persistShapes() {
     var result = [];
     Object.keys(shapeRegistry).forEach(function(id) {
         var entry = shapeRegistry[id];
-        var out = { kind: entry.kind, name: entry.name || '', showName: !!entry.showName, showCoords: !!entry.showCoords };
+        var out = {
+            kind: entry.kind, name: entry.name || '', showName: !!entry.showName, showCoords: !!entry.showCoords,
+            labelLon: entry.labelLngLat ? entry.labelLngLat[0] : null,
+            labelLat: entry.labelLngLat ? entry.labelLngLat[1] : null
+        };
 
         if (entry.kind === 'marker' || entry.kind === 'text') {
             var ll = entry.marker.getLngLat();
@@ -1547,7 +1650,7 @@ function loadShapesFromJson(jsonStr) {
                     if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(id, ev); }
                 });
                 var marker = new maplibregl.Marker({ element: el, anchor: 'bottom', draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
-                shapeRegistry[id] = { kind: 'marker', marker: marker, props: props, lonLat: [entry.lon, entry.lat], name: entry.name, showName: entry.showName, showCoords: entry.showCoords };
+                shapeRegistry[id] = { kind: 'marker', marker: marker, props: props, lonLat: [entry.lon, entry.lat], name: entry.name, showName: entry.showName, showCoords: entry.showCoords, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
                 setupMarkerDragBehavior(marker, id);
                 updateElementLabelOverlay(id);
             } else if (entry.kind === 'text') {
@@ -1558,7 +1661,7 @@ function loadShapesFromJson(jsonStr) {
                     if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(tid, ev); }
                 });
                 var tmarker = new maplibregl.Marker({ element: tel, anchor: 'center', draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
-                shapeRegistry[tid] = { kind: 'text', marker: tmarker, props: tprops, lonLat: [entry.lon, entry.lat], name: entry.name, showName: entry.showName, showCoords: entry.showCoords };
+                shapeRegistry[tid] = { kind: 'text', marker: tmarker, props: tprops, lonLat: [entry.lon, entry.lat], name: entry.name, showName: entry.showName, showCoords: entry.showCoords, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
                 setupMarkerDragBehavior(tmarker, tid);
                 updateElementLabelOverlay(tid);
             } else if (entry.kind === 'circle') {
@@ -1569,7 +1672,7 @@ function loadShapesFromJson(jsonStr) {
                     properties: { shapeId: cid, color: cprops.color, opacity: cprops.opacity, weight: cprops.weight },
                     geometry: makeCirclePolygon(entry.lon, entry.lat, entry.radius).geometry
                 };
-                shapeRegistry[cid] = { kind: 'circle', props: cprops, feature: cfeature, name: entry.name, showName: entry.showName, showCoords: entry.showCoords };
+                shapeRegistry[cid] = { kind: 'circle', props: cprops, feature: cfeature, name: entry.name, showName: entry.showName, showCoords: entry.showCoords, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
                 updateElementLabelOverlay(cid);
             } else {
                 // polyline / polygon / rectangle - כולם נשמרים עם coordinates גולמיים בפורמט GeoJSON
@@ -1583,7 +1686,7 @@ function loadShapesFromJson(jsonStr) {
                     properties: { shapeId: sid, color: sprops.color, opacity: sprops.opacity, weight: sprops.weight },
                     geometry: geometry
                 };
-                shapeRegistry[sid] = { kind: entry.kind, props: sprops, feature: sfeature, name: entry.name, showName: entry.showName, showCoords: entry.showCoords };
+                shapeRegistry[sid] = { kind: entry.kind, props: sprops, feature: sfeature, name: entry.name, showName: entry.showName, showCoords: entry.showCoords, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
                 updateElementLabelOverlay(sid);
             }
         });
@@ -1592,6 +1695,25 @@ function loadShapesFromJson(jsonStr) {
         console.error('Failed to load saved shapes', e);
     }
 }
+
+// ===== חלון אישור מחיקה (custom modal) =====
+var confirmModalCallback = null;
+
+function showConfirmModal(message, onConfirm) {
+    document.getElementById('confirmModalMessage').textContent = message;
+    confirmModalCallback = onConfirm;
+    document.getElementById('confirmModalOverlay').classList.add('visible');
+}
+
+document.getElementById('confirmModalYesBtn').addEventListener('click', function() {
+    document.getElementById('confirmModalOverlay').classList.remove('visible');
+    if (confirmModalCallback) confirmModalCallback();
+    confirmModalCallback = null;
+});
+document.getElementById('confirmModalCancelBtn').addEventListener('click', function() {
+    document.getElementById('confirmModalOverlay').classList.remove('visible');
+    confirmModalCallback = null;
+});
 
 // ===== חלון רשימת אלמנטים =====
 var SHAPE_ICON_SVGS = {
@@ -1610,6 +1732,13 @@ document.getElementById('btnElementList').addEventListener('click', function() {
 document.getElementById('closeElementListBtn').addEventListener('click', function() {
     document.getElementById('elementListPanel').classList.remove('visible');
 });
+document.getElementById('deleteAllElementsBtn').addEventListener('click', function() {
+    if (Object.keys(shapeRegistry).length === 0) return;
+    showConfirmModal('למחוק את כל האלמנטים מהמפה? לא ניתן לבטל פעולה זו.', function() {
+        Object.keys(shapeRegistry).forEach(function(id) { deleteShape(id); });
+        renderElementList();
+    });
+});
 
 function renderElementList() {
     var body = document.getElementById('elementListBody');
@@ -1626,14 +1755,67 @@ function renderElementList() {
         var displayName = entry.name || genericNameFor(entry.kind);
         var row = document.createElement('div');
         row.className = 'element-row';
-        row.innerHTML =
+
+        var info = document.createElement('div');
+        info.className = 'element-row-info';
+        info.innerHTML =
             '<svg viewBox="0 0 24 24" fill="currentColor">' + (SHAPE_ICON_SVGS[entry.kind] || '') + '</svg>' +
-            '<div><div class="element-name">' + escapeHtml(displayName) + '</div>' +
+            '<div style="min-width:0;"><div class="element-name">' + escapeHtml(displayName) + '</div>' +
             '<div class="element-type">' + (KIND_DISPLAY_NAMES[entry.kind] || entry.kind) + '</div></div>';
-        row.addEventListener('click', function() {
+        info.addEventListener('click', function() {
             centerOnElementAt30Percent(id);
             document.getElementById('elementListPanel').classList.remove('visible');
         });
+
+        var controls = document.createElement('div');
+        controls.className = 'element-row-controls';
+
+        var nameGroup = document.createElement('div');
+        nameGroup.className = 'row-checkbox-group';
+        var nameCheckbox = document.createElement('input');
+        nameCheckbox.type = 'checkbox';
+        nameCheckbox.checked = !!entry.showName;
+        nameCheckbox.addEventListener('change', function() {
+            entry.showName = nameCheckbox.checked;
+            updateElementLabelOverlay(id);
+            persistShapes();
+        });
+        var nameLabel = document.createElement('label');
+        nameLabel.textContent = 'שם';
+        nameGroup.appendChild(nameCheckbox);
+        nameGroup.appendChild(nameLabel);
+
+        var coordsGroup = document.createElement('div');
+        coordsGroup.className = 'row-checkbox-group';
+        var coordsCheckbox = document.createElement('input');
+        coordsCheckbox.type = 'checkbox';
+        coordsCheckbox.checked = !!entry.showCoords;
+        coordsCheckbox.addEventListener('change', function() {
+            entry.showCoords = coordsCheckbox.checked;
+            updateElementLabelOverlay(id);
+            persistShapes();
+        });
+        var coordsLabel = document.createElement('label');
+        coordsLabel.textContent = 'קו"א';
+        coordsGroup.appendChild(coordsCheckbox);
+        coordsGroup.appendChild(coordsLabel);
+
+        var deleteBtn = document.createElement('button');
+        deleteBtn.className = 'row-delete-btn';
+        deleteBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6,19c0,1.1 0.9,2 2,2h8c1.1,0 2,-0.9 2,-2V7H6V19zM19,4h-3.5l-1,-1h-5l-1,1H5v2h14V4z"/></svg>';
+        deleteBtn.addEventListener('click', function() {
+            showConfirmModal('למחוק את "' + displayName + '"? לא ניתן לבטל פעולה זו.', function() {
+                deleteShape(id);
+                renderElementList();
+            });
+        });
+
+        controls.appendChild(nameGroup);
+        controls.appendChild(coordsGroup);
+        controls.appendChild(deleteBtn);
+
+        row.appendChild(info);
+        row.appendChild(controls);
         body.appendChild(row);
     });
 }
