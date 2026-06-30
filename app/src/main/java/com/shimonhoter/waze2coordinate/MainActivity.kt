@@ -283,7 +283,7 @@ class MainActivity : AppCompatActivity() {
 
                 val screenHeight = resources.displayMetrics.heightPixels
                 val resizeHandleHeightPx = binding.mapResizeHandle.height.takeIf { it > 0 }
-                    ?: (22 * resources.displayMetrics.density).toInt()
+                    ?: (18 * resources.displayMetrics.density).toInt()
 
                 // שוליים ביטחון קטנים מתחת (ניווט המערכת/בארים שקופים) - לא קריטי אם
                 // המכשיר מציג insets, אבל מונע שהמפה "תיחתך" ממש בקצה הפיזי של המסך
