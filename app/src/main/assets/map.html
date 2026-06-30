@@ -1710,7 +1710,22 @@ function persistShapes() {
     }
 }
 
+/**
+ * נקרא מ-Kotlin ב-onPageFinished (HTML סיים להיטען) - אבל ה-MapLibre style/sources
+ * נטענים באופן אסינכרוני בנפרד, הרבה אחרי שה-HTML עצמו כבר מוכן. בלי ההמתנה הזו,
+ * updateShapesSource() בתוך הפונקציה היה רץ לפני ש-setupShapesSourceAndLayers() יצר
+ * בכלל את ה-GeoJSON source (map.on('load')) - מה שגרם ל-setData() להיכשל בשקט,
+ * ולכן צורות/סימונים לא הופיעו אחרי פתיחת האפליקציה (רק תוויות השם/קואורדינטות,
+ * שהן maplibregl.Marker עצמאיים ולא תלויים ב-source, הופיעו). הציורים הישנים היו
+ * "נעלמים" עד שיצירת אלמנט חדש קראה שוב ל-updateShapesSource() במקרה אחרי שה-source
+ * כבר היה קיים, ובנתה את כולם מחדש מ-shapeRegistry בבת אחת.
+ */
 function loadShapesFromJson(jsonStr) {
+    if (!map.isStyleLoaded() || !map.getSource(SHAPES_SOURCE_ID)) {
+        setTimeout(function() { loadShapesFromJson(jsonStr); }, 80);
+        return;
+    }
+
     try {
         var shapes = JSON.parse(jsonStr);
         shapes.forEach(function(entry) {
