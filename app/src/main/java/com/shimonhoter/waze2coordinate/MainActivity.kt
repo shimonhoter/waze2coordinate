@@ -96,7 +96,7 @@ class MainActivity : AppCompatActivity() {
 
         setupMapWebView()
         setupMapResizeHandle()
-        applyAdaptiveInitialMapHeight()
+        fitMapHeightToScreen()
 
         binding.btnExpandMap.setOnClickListener { expandMap() }
         binding.btnCollapseMap.setOnClickListener { collapseMap() }
@@ -265,17 +265,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * בפתיחת האפליקציה, מחשב את הגובה ההתחלתי של אזור המפה כך שהקצה התחתון שלו
-     * (כולל ידית הגרירה) יגיע בדיוק לקצה התחתון של המסך הזמין - מחושב דינמית לפי
-     * המיקום בפועל של ה-container על המסך (תלוי בגודל הכותרת/כרטיס ההמרה שמעליו,
-     * שמשתנה ממכשיר למכשיר), ולא לפי ערך dp קבוע מראש.
-     * משתמש ב-ViewTreeObserver כדי לחכות ל-layout pass הראשון, שרק בו יש מימדים
-     * אמיתיים על המסך לעבוד איתם.
+     * מחשב ומחיל מחדש את גובה אזור המפה המוטמעת, כך שכל תוכן העמוד (כותרת, כרטיס
+     * המרה, מפה, כרטיס תוצאה אם קיים) ייכנס יחד בגובה המסך בלי צורך בגלילה - הקצה
+     * התחתון של אזור המפה (כולל ידית הגרירה) מגיע בדיוק לקצה התחתון של השטח הזמין.
+     * נקרא הן בפתיחת האפליקציה (לפני שכרטיס התוצאה קיים בכלל) והן בכל פעם שכרטיס
+     * התוצאה מופיע/נעלם - בכל מקרה דורס כל גודל ידני שהמשתמש קבע בעבר בגרירה, כדי
+     * שהתצוגה תמיד תישאר אדפטיבית ועדכנית לתוכן הנוכחי בפועל.
+     * מחכה ל-layout pass הבא (ViewTreeObserver) כי רק שם יש מימדים אמיתיים על המסך -
+     * חיוני בעיקר אחרי שינוי visibility, שדורש layout pass כדי שהגבהים יתעדכנו בפועל.
      */
-    private fun applyAdaptiveInitialMapHeight() {
-        binding.embeddedMapContainer.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+    private fun fitMapHeightToScreen() {
+        binding.mainScrollView.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
             override fun onGlobalLayout() {
-                binding.embeddedMapContainer.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                binding.mainScrollView.viewTreeObserver.removeOnGlobalLayoutListener(this)
 
                 val location = IntArray(2)
                 binding.embeddedMapContainer.getLocationOnScreen(location)
@@ -285,11 +287,17 @@ class MainActivity : AppCompatActivity() {
                 val resizeHandleHeightPx = binding.mapResizeHandle.height.takeIf { it > 0 }
                     ?: (18 * resources.displayMetrics.density).toInt()
 
-                // שוליים ביטחון קטנים מתחת (ניווט המערכת/בארים שקופים) - לא קריטי אם
-                // המכשיר מציג insets, אבל מונע שהמפה "תיחתך" ממש בקצה הפיזי של המסך
+                // אם כרטיס התוצאה גלוי כרגע, צריך גם את הגובה שלו (כולל המרווח שמעליו)
+                // כדי שכל מה שמתחת למפה עדיין ייכנס במסך בלי גלילה
+                val resultHeightPx = if (binding.resultLayout.visibility == View.VISIBLE) {
+                    binding.resultLayout.height
+                } else {
+                    0
+                }
+
                 val bottomSafetyMarginPx = (8 * resources.displayMetrics.density).toInt()
 
-                val availableHeight = screenHeight - containerTopY - resizeHandleHeightPx - bottomSafetyMarginPx
+                val availableHeight = screenHeight - containerTopY - resizeHandleHeightPx - resultHeightPx - bottomSafetyMarginPx
                 val minHeightPx = (120 * resources.displayMetrics.density).toInt()
                 val maxHeightPx = (resources.displayMetrics.heightPixels * 0.85).toInt()
                 val targetHeight = availableHeight.coerceIn(minHeightPx, maxHeightPx)
@@ -607,6 +615,7 @@ class MainActivity : AppCompatActivity() {
 
         hideError()
         binding.resultLayout.visibility = View.GONE
+        fitMapHeightToScreen()
 
         if (url.isNullOrBlank()) {
             showError(getString(R.string.error_empty_url))
@@ -763,6 +772,7 @@ class MainActivity : AppCompatActivity() {
         lastCoords = coords
         binding.coordCombined.text = "${coords.lat}, ${coords.lon}"
         binding.resultLayout.visibility = View.VISIBLE
+        fitMapHeightToScreen()
 
         // ממרכזים את המפה המוטמעת על התוצאה - היא תמיד גלויה בעמוד, אין צורך להרחיב
         // אותה אוטומטית. ה-snapshot ל-WhatsApp נלכד בנפרד בעת כיווץ (אם המשתמש הרחיב

@@ -1316,6 +1316,42 @@ function formatArea(sqMeters) {
     return Math.round(sqMeters) + ' מ"ר';
 }
 
+/**
+ * מחשב את נתוני המידה הרלוונטיים לכל סוג אלמנט בעל גיאומטריה (לא פין/טקסט):
+ * קו - אורך כולל; פוליגון/מלבן - שטח + היקף; עיגול - שטח + היקף (לפי הרדיוס בפועל).
+ * משתמש באותם helpers (haversineDistance/polygonAreaApprox) שכבר נמצאים בקובץ
+ * ושימשו עד כה רק למדידה בזמן אמת בעת ציור - כעת גם לתצוגה קבועה על אלמנט קיים.
+ */
+function computeShapeMetrics(entry) {
+    if (entry.kind === 'polyline') {
+        var coords = entry.feature.geometry.coordinates;
+        var dist = 0;
+        for (var i = 1; i < coords.length; i++) {
+            dist += haversineDistance(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
+        }
+        return 'אורך: ' + formatDistance(dist);
+    }
+
+    if (entry.kind === 'circle') {
+        var radius = entry.props.radius;
+        var area = Math.PI * radius * radius;
+        var circumference = 2 * Math.PI * radius;
+        return 'שטח: ' + formatArea(area) + ' | היקף: ' + formatDistance(circumference);
+    }
+
+    if (entry.kind === 'polygon' || entry.kind === 'rectangle') {
+        var ring = entry.feature.geometry.coordinates[0];
+        var polyArea = polygonAreaApprox(ring);
+        var perimeter = 0;
+        for (var j = 1; j < ring.length; j++) {
+            perimeter += haversineDistance(ring[j - 1][1], ring[j - 1][0], ring[j][1], ring[j][0]);
+        }
+        return 'שטח: ' + formatArea(polyArea) + ' | היקף: ' + formatDistance(perimeter);
+    }
+
+    return '';
+}
+
 // ===== עריכה/מחיקה =====
 var activeEditShapeId = null;
 
@@ -1383,6 +1419,19 @@ function fillEditPopupFields(entry) {
     document.getElementById('editNameInput').value = entry.name || '';
     document.getElementById('editShowNameCheckbox').checked = !!entry.showName;
     document.getElementById('editShowCoordsCheckbox').checked = !!entry.showCoords;
+
+    // צ'קבוקס מדדים - רלוונטי רק לצורות בעלות גיאומטריה (לא לפין/תווית טקסט שהן
+    // נקודה בודדת בלי אורך/שטח/היקף). התווית עצמה (label) משתנה לפי סוג בתוך
+    // updateElementLabelOverlay - קו=אורך, פוליגון/מלבן/עיגול=שטח+היקף.
+    var metricsRow = document.getElementById('editShowMetricsRow');
+    if (isMarker || isText) {
+        metricsRow.style.display = 'none';
+    } else {
+        metricsRow.style.display = 'flex';
+        document.getElementById('editShowMetricsCheckbox').checked = !!entry.showMetrics;
+        document.getElementById('editShowMetricsLabel').textContent =
+            (kind === 'polyline') ? 'הצג אורך קו' : 'הצג שטח והיקף';
+    }
 }
 
 // ===== פופאפ פרטי אלמנט - נפתח אחרי כל יצירת ציור: שם + טוגלים לתצוגת שם/קואורדינטות
@@ -1454,7 +1503,7 @@ function updateElementLabelOverlay(id) {
     var trueCenter = computeShapeCenter(entry);
     entry._lastKnownCenter = trueCenter;
 
-    if (!entry.showName && !entry.showCoords) return;
+    if (!entry.showName && !entry.showCoords && !entry.showMetrics) return;
 
     // אם עדיין אין מיקום שמור לתווית (למשל בפעם הראשונה שמפעילים תצוגה) - מתחילים
     // ממרכז הצורה כברירת מחדל, אבל מאותו רגע זה הופך להיות מיקום עצמאי שניתן לגרור
@@ -1490,6 +1539,12 @@ function buildElementLabelContent(entry, trueCenter) {
         coordsEl.innerText = trueCenter[1].toFixed(5) + ', ' + trueCenter[0].toFixed(5);
         container.appendChild(coordsEl);
     }
+    if (entry.showMetrics && entry.kind !== 'marker' && entry.kind !== 'text') {
+        var metricsEl = document.createElement('div');
+        metricsEl.className = 'element-label-coords element-label-metrics';
+        metricsEl.innerText = computeShapeMetrics(entry);
+        container.appendChild(metricsEl);
+    }
     return container;
 }
 
@@ -1519,11 +1574,20 @@ function refreshElementLabelForGeometryChange(id) {
         labelMarker.setLngLat(entry.labelLngLat);
     }
 
-    // עדכון טקסט הקואורדינטות בלבד (אם מוצג), בלי לבנות מחדש את כל אלמנט ה-DOM
+    // עדכון טקסט הקואורדינטות בלבד (אם מוצג), בלי לבנות מחדש את כל אלמנט ה-DOM.
+    // משתמשים ב-:not כדי לא לבחור בטעות את אלמנט המדדים, ששניהם חולקים אותו class בסיס
     if (entry.showCoords) {
-        var coordsEl = labelMarker.getElement().querySelector('.element-label-coords');
+        var coordsEl = labelMarker.getElement().querySelector('.element-label-coords:not(.element-label-metrics)');
         if (coordsEl) {
             coordsEl.innerText = newCenter[1].toFixed(5) + ', ' + newCenter[0].toFixed(5);
+        }
+    }
+    // עדכון חי של נתוני המידה (אורך/שטח/היקף) - משתנים בדיוק כמו הקואורדינטות בכל
+    // גרירה של ידית/נקודה שמשנה את הגיאומטריה בפועל
+    if (entry.showMetrics) {
+        var metricsEl = labelMarker.getElement().querySelector('.element-label-metrics');
+        if (metricsEl) {
+            metricsEl.innerText = computeShapeMetrics(entry);
         }
     }
 }
@@ -1562,6 +1626,7 @@ function buildEditPopupElement() {
         '<input type="text" id="editNameInput" placeholder="שם האלמנט (אופציונלי)" />' +
         '<div class="checkbox-row"><input type="checkbox" id="editShowNameCheckbox"/><label for="editShowNameCheckbox">הצג שם על המפה</label></div>' +
         '<div class="checkbox-row"><input type="checkbox" id="editShowCoordsCheckbox"/><label for="editShowCoordsCheckbox">הצג קואורדינטות מרכז על המפה</label></div>' +
+        '<div class="checkbox-row" id="editShowMetricsRow"><input type="checkbox" id="editShowMetricsCheckbox"/><label for="editShowMetricsCheckbox" id="editShowMetricsLabel">הצג נתוני מידה</label></div>' +
         '<div class="option-row"><label>צבע</label><input type="color" id="editColorPicker"/></div>' +
         '<div class="option-row" id="editOpacityRow"><label>שקיפות</label><input type="range" id="editOpacitySlider" min="10" max="100"/><span class="val" id="editOpacityVal"></span></div>' +
         '<div class="option-row"><label id="editWeightLabel">עובי</label><input type="range" id="editWeightSlider" min="1" max="48"/><span class="val" id="editWeightVal"></span></div>' +
@@ -1574,6 +1639,7 @@ function buildEditPopupElement() {
     document.getElementById('editNameInput').addEventListener('input', applyEditChanges);
     document.getElementById('editShowNameCheckbox').addEventListener('change', applyEditChanges);
     document.getElementById('editShowCoordsCheckbox').addEventListener('change', applyEditChanges);
+    document.getElementById('editShowMetricsCheckbox').addEventListener('change', applyEditChanges);
     document.getElementById('editDeleteBtn').addEventListener('click', function() {
         if (activeEditShapeId) {
             var shapeIdToDelete = activeEditShapeId;
@@ -1624,6 +1690,9 @@ function applyEditChanges() {
     entry.name = document.getElementById('editNameInput').value.trim();
     entry.showName = document.getElementById('editShowNameCheckbox').checked;
     entry.showCoords = document.getElementById('editShowCoordsCheckbox').checked;
+    if (entry.kind !== 'marker' && entry.kind !== 'text') {
+        entry.showMetrics = document.getElementById('editShowMetricsCheckbox').checked;
+    }
 
     if (entry.kind === 'marker') {
         entry.props.color = color;
@@ -1680,6 +1749,7 @@ function persistShapes() {
         var entry = shapeRegistry[id];
         var out = {
             kind: entry.kind, name: entry.name || '', showName: !!entry.showName, showCoords: !!entry.showCoords,
+            showMetrics: !!entry.showMetrics,
             labelLon: entry.labelLngLat ? entry.labelLngLat[0] : null,
             labelLat: entry.labelLngLat ? entry.labelLngLat[1] : null
         };
@@ -1737,7 +1807,7 @@ function loadShapesFromJson(jsonStr) {
                     if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(id, ev); }
                 });
                 var marker = new maplibregl.Marker({ element: el, anchor: 'bottom', draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
-                shapeRegistry[id] = { kind: 'marker', marker: marker, props: props, lonLat: [entry.lon, entry.lat], name: entry.name, showName: entry.showName, showCoords: entry.showCoords, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
+                shapeRegistry[id] = { kind: 'marker', marker: marker, props: props, lonLat: [entry.lon, entry.lat], name: entry.name, showName: entry.showName, showCoords: entry.showCoords, showMetrics: entry.showMetrics, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
                 setupMarkerDragBehavior(marker, id);
                 updateElementLabelOverlay(id);
             } else if (entry.kind === 'text') {
@@ -1748,7 +1818,7 @@ function loadShapesFromJson(jsonStr) {
                     if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(tid, ev); }
                 });
                 var tmarker = new maplibregl.Marker({ element: tel, anchor: 'center', draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
-                shapeRegistry[tid] = { kind: 'text', marker: tmarker, props: tprops, lonLat: [entry.lon, entry.lat], name: entry.name, showName: entry.showName, showCoords: entry.showCoords, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
+                shapeRegistry[tid] = { kind: 'text', marker: tmarker, props: tprops, lonLat: [entry.lon, entry.lat], name: entry.name, showName: entry.showName, showCoords: entry.showCoords, showMetrics: entry.showMetrics, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
                 setupMarkerDragBehavior(tmarker, tid);
                 updateElementLabelOverlay(tid);
             } else if (entry.kind === 'circle') {
@@ -1759,7 +1829,7 @@ function loadShapesFromJson(jsonStr) {
                     properties: { shapeId: cid, color: cprops.color, opacity: cprops.opacity, weight: cprops.weight },
                     geometry: makeCirclePolygon(entry.lon, entry.lat, entry.radius).geometry
                 };
-                shapeRegistry[cid] = { kind: 'circle', props: cprops, feature: cfeature, name: entry.name, showName: entry.showName, showCoords: entry.showCoords, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
+                shapeRegistry[cid] = { kind: 'circle', props: cprops, feature: cfeature, name: entry.name, showName: entry.showName, showCoords: entry.showCoords, showMetrics: entry.showMetrics, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
                 updateElementLabelOverlay(cid);
             } else {
                 // polyline / polygon / rectangle - כולם נשמרים עם coordinates גולמיים בפורמט GeoJSON
@@ -1773,7 +1843,7 @@ function loadShapesFromJson(jsonStr) {
                     properties: { shapeId: sid, color: sprops.color, opacity: sprops.opacity, weight: sprops.weight },
                     geometry: geometry
                 };
-                shapeRegistry[sid] = { kind: entry.kind, props: sprops, feature: sfeature, name: entry.name, showName: entry.showName, showCoords: entry.showCoords, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
+                shapeRegistry[sid] = { kind: entry.kind, props: sprops, feature: sfeature, name: entry.name, showName: entry.showName, showCoords: entry.showCoords, showMetrics: entry.showMetrics, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
                 updateElementLabelOverlay(sid);
             }
         });
