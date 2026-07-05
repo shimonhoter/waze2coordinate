@@ -482,9 +482,11 @@
         <div class="toolbar-tooltip">החלף סגנון מפה (רחובות/לוויין)</div>
         <div class="options-popup" id="mapStylePopup">
             <div class="popup-title">סגנון מפה</div>
-            <div class="popup-actions">
-                <button class="btn-done" id="btnStyleStreet">רחובות</button>
-                <button class="btn-done" id="btnStyleSatellite" style="background:#7f8c8d;">לוויין</button>
+            <div class="popup-actions" style="flex-direction:column; gap:6px;">
+                <button class="btn-done" id="btnStyleStreet" style="background:#3498db;">🗺 רחובות</button>
+                <button class="btn-done" id="btnStyleSatellite" style="background:#7f8c8d;">🛰 לוויין</button>
+                <button class="btn-done" id="btnStyleHiking" style="background:#27ae60;">🥾 שטח (הליכה)</button>
+                <button class="btn-done" id="btnStyleMTB" style="background:#e67e22;">🚵 שטח (MTB)</button>
             </div>
         </div>
     </div>
@@ -564,32 +566,64 @@ var map = new maplibregl.Map({
 });
 map.addControl(new maplibregl.NavigationControl(), 'top-left');
 
-var isSatelliteMode = false;
+// סגנון המפה הנוכחי: 'street' | 'satellite' | 'hiking' | 'mtb'
+var currentMapStyle = 'street';
 
+// IHM tile URLs - מפת ישראל הסלולרית (Israel Hiking Map), מבוסס OSM
+var IHM_HIKING_URL = 'https://israelhiking.osm.org.il/Hebrew/Tiles/{z}/{x}/{y}.png';
+var IHM_MTB_URL    = 'https://israelhiking.osm.org.il/Hebrew/mtbTiles/{z}/{x}/{y}.png';
+
+/**
+ * מחליף סגנון מפה. מצבים אפשריים:
+ *   'street'    — OpenFreeMap liberty (וקטורי, ברירת מחדל)
+ *   'satellite' — Esri World Imagery (ראסטר)
+ *   'hiking'    — Israel Hiking Map (ראסטר, שבילים מסומנים)
+ *   'mtb'       — Israel MTB Map (ראסטר, מסלולי אופניים)
+ * אחרי כל החלפה, reinitializeAfterStyleChange משחזר את שכבות ה-GeoJSON (ציורים).
+ */
 function switchMapStyle(style) {
     closeAllPopups();
-    if (style === 'satellite' && !isSatelliteMode) {
-        isSatelliteMode = true;
-        // Esri World Imagery - שכבת רקע ראסטרית (לא וקטורית - לא קיים מקור וקטורי חינמי
-        // ללוויין), מוצגת כ-style נפרד מלא כדי לא לערבב מקורות וקטוריים/ראסטריים בעת מעבר
-        map.setStyle({
-            version: 8,
-            sources: {
-                'satellite-tiles': {
-                    type: 'raster',
-                    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-                    tileSize: 256,
-                    attribution: 'Tiles &copy; Esri'
-                }
-            },
-            layers: [{ id: 'satellite-layer', type: 'raster', source: 'satellite-tiles' }]
-        });
-        waitForStyleLoadedThen(reinitializeAfterStyleChange);
-    } else if (style === 'street' && isSatelliteMode) {
-        isSatelliteMode = false;
+    if (style === currentMapStyle) return;
+    currentMapStyle = style;
+
+    if (style === 'street') {
         map.setStyle(STREET_STYLE_URL);
         waitForStyleLoadedThen(reinitializeAfterStyleChange);
+        return;
     }
+
+    // כל שאר המצבים — raster source מלא
+    var tiles, attribution, layerId;
+    if (style === 'satellite') {
+        tiles       = ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'];
+        attribution = 'Tiles &copy; Esri';
+        layerId     = 'satellite-layer';
+    } else if (style === 'hiking') {
+        tiles       = [IHM_HIKING_URL];
+        attribution = '&copy; <a href="https://israelhiking.osm.org.il">Israel Hiking Map</a> contributors';
+        layerId     = 'ihm-hiking-layer';
+    } else if (style === 'mtb') {
+        tiles       = [IHM_MTB_URL];
+        attribution = '&copy; <a href="https://israelhiking.osm.org.il">Israel MTB Map</a> contributors';
+        layerId     = 'ihm-mtb-layer';
+    } else {
+        return;
+    }
+
+    map.setStyle({
+        version: 8,
+        sources: {
+            'raster-base': {
+                type: 'raster',
+                tiles: tiles,
+                tileSize: 256,
+                attribution: attribution,
+                maxzoom: (style === 'satellite') ? 19 : 16
+            }
+        },
+        layers: [{ id: layerId, type: 'raster', source: 'raster-base' }]
+    });
+    waitForStyleLoadedThen(reinitializeAfterStyleChange);
 }
 
 /**
@@ -800,6 +834,8 @@ document.getElementById('btnMapStyle').addEventListener('click', function() {
 });
 document.getElementById('btnStyleStreet').addEventListener('click', function() { switchMapStyle('street'); });
 document.getElementById('btnStyleSatellite').addEventListener('click', function() { switchMapStyle('satellite'); });
+document.getElementById('btnStyleHiking').addEventListener('click', function() { switchMapStyle('hiking'); });
+document.getElementById('btnStyleMTB').addEventListener('click', function() { switchMapStyle('mtb'); });
 
 // ===== הטיית מפה ל-3D (pitch) - טוגל בין מבט שטוח (pitch=0) למבט פרספקטיבי (pitch=55) =====
 var is3DTiltActive = false;
@@ -1450,6 +1486,9 @@ function showElementDetailsPopup(id) {
     document.getElementById('elementNameInput').value = entry.name || '';
     document.getElementById('elementShowNameCheckbox').checked = !!entry.showName;
     document.getElementById('elementShowCoordsCheckbox').checked = !!entry.showCoords;
+    document.getElementById('elementShowMetricsCheckbox').checked = !!entry.showMetrics;
+    document.getElementById('elementShowMetricsLabel').textContent =
+        (entry.kind === 'polyline') ? 'הצג אורך קו' : 'הצג שטח והיקף';
     popup.dataset.shapeId = id;
 
     popup.classList.add('visible');
@@ -1465,6 +1504,7 @@ function buildElementDetailsPopupElement() {
         '<input type="text" id="elementNameInput" placeholder="שם האלמנט (אופציונלי)" />' +
         '<div class="checkbox-row"><input type="checkbox" id="elementShowNameCheckbox"/><label for="elementShowNameCheckbox">הצג שם על המפה</label></div>' +
         '<div class="checkbox-row"><input type="checkbox" id="elementShowCoordsCheckbox"/><label for="elementShowCoordsCheckbox">הצג קואורדינטות מרכז על המפה</label></div>' +
+        '<div class="checkbox-row"><input type="checkbox" id="elementShowMetricsCheckbox"/><label for="elementShowMetricsCheckbox" id="elementShowMetricsLabel">הצג שטח והיקף</label></div>' +
         '<div class="popup-actions"><button class="btn-done" id="elementDetailsDoneBtn">סגור</button></div>';
     document.body.appendChild(popup);
 
@@ -1475,6 +1515,7 @@ function buildElementDetailsPopupElement() {
             entry.name = document.getElementById('elementNameInput').value.trim();
             entry.showName = document.getElementById('elementShowNameCheckbox').checked;
             entry.showCoords = document.getElementById('elementShowCoordsCheckbox').checked;
+            entry.showMetrics = document.getElementById('elementShowMetricsCheckbox').checked;
             updateElementLabelOverlay(id);
             persistShapes();
         }

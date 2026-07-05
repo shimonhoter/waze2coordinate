@@ -33,6 +33,7 @@
     <string name="msg_coords_label">קואורדינטות</string>
     <string name="msg_maps_label">צפייה במפה</string>
     <string name="msg_waze_label">ניווט עם Waze</string>
+    <string name="msg_copied">הועתק ללוח</string>
     <string name="error_address_not_found">לא נמצאה כתובת מתאימה</string>
     <string name="gps_follow_on">מעקב GPS פעיל</string>
     <string name="gps_follow_off">מעקב GPS כבוי</string>

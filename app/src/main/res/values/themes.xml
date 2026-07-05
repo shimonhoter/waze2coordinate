@@ -1,8 +1,9 @@
 <resources>
-    <style name="Theme.Waze2Coordinate" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/app_primary</item>
-        <item name="colorPrimaryDark">@color/app_primary_dark</item>
-        <item name="colorAccent">@color/app_primary</item>
+    <!-- תמת ה-XML משמשת רק כ-host shell עבור Compose. כל העיצוב האמיתי (צבעים,
+         טיפוגרפיה, dark/light) מנוהל ב-Compose דרך AppTheme ב-Theme.kt.
+         Theme.Material3.DayNight.NoActionBar הוסר מהתלויות עם המעבר ל-Compose-only,
+         לכן משתמשים ב-Theme.AppCompat.DayNight.NoActionBar שתמיד זמין דרך appcompat. -->
+    <style name="Theme.Waze2Coordinate" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">@color/app_background</item>
         <item name="android:statusBarColor">@color/app_background</item>
     </style>
