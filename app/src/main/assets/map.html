@@ -566,10 +566,24 @@ maplibregl.setRTLTextPlugin(
 // "liberty" הוא סטייל מודרני ועשיר יותר ויזואלית מהאריחים הראסטריים (תמונה) שהיו בשימוש קודם.
 var STREET_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
+// אבחון: style רסטר פשוט שלא צריך glyphs/sprites
+var DIAGNOSTIC_STYLE = {
+    version: 8,
+    sources: {
+        'osm': {
+            type: 'raster',
+            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tileSize: 256,
+            attribution: '&copy; OpenStreetMap'
+        }
+    },
+    layers: [{ id: 'osm-layer', type: 'raster', source: 'osm' }]
+};
+
 var map = new maplibregl.Map({
     container: 'map',
-    style: STREET_STYLE_URL,
-    center: [DEFAULT_LON, DEFAULT_LAT], // MapLibre: [lng, lat], לא [lat, lng] כמו ב-Leaflet
+    style: DIAGNOSTIC_STYLE,
+    center: [DEFAULT_LON, DEFAULT_LAT],
     zoom: DEFAULT_ZOOM,
     pitch: 0,
     attributionControl: true
