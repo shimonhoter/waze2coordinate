@@ -200,6 +200,9 @@ class MainActivity : AppCompatActivity() {
     private fun setupMapWebView(wv: android.webkit.WebView) {
         wv.settings.javaScriptEnabled = true
         wv.settings.domStorageEnabled = true
+        @Suppress("SetJavaScriptEnabled")
+        wv.settings.allowFileAccessFromFileURLs = true
+        wv.settings.allowUniversalAccessFromFileURLs = true
         wv.addJavascriptInterface(MapJsBridge(), "AndroidBridge")
 
         wv.webChromeClient = object : android.webkit.WebChromeClient() {
