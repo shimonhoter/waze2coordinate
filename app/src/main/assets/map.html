@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
+    <link rel="stylesheet" href="maplibre-gl.css" />
     <style>
 /* [START: MapCSS] */
         html, body, #map { height: 100%; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
@@ -535,7 +535,7 @@
 <div class="map-hint-text" id="mapHintText">הקש על המפה לבחירת מיקום</div>
 <!-- [END: MapHTML] -->
 
-<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+<script src="maplibre-gl.js"></script>
 <script>
 // [START: MapLogic]
 
@@ -548,8 +548,8 @@ var DEFAULT_ZOOM = 8;
 // LTR): https://maplibre.org/maplibre-gl-js/docs/examples/add-support-for-right-to-left-scripts/
 // משתמשים בגרסה 0.2.3 (לא 0.3.0) - גרסת ה-0.3.0 ידועה כנכשלת בטעינה בחלק מהסביבות.
 maplibregl.setRTLTextPlugin(
-    'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js',
-    true // lazy load - נטען רק כשבאמת נדרש טקסט RTL, לא תמיד
+    'mapbox-gl-rtl-text.js',
+    true
 );
 
 // OpenFreeMap - מקור אריחים וקטוריים חינמי ולא מוגבל (ללא מפתח API), מבוסס OpenStreetMap.
