@@ -271,17 +271,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun collapseMap() {
-        webView?.evaluateJavascript("setCleanCaptureMode(true)") {
-            webView?.postDelayed({
-                captureMapSnapshot { uri ->
-                    cachedSnapshotUri = uri
-                    webView?.evaluateJavascript("setCleanCaptureMode(false)", null)
-                    webView?.evaluateJavascript("setEmbeddedChromeVisible(false)", null)
-                    isMapExpanded = false
-                    uiState = uiState.copy(isMapExpanded = false)
-                }
-            }, 16)
-        }
+        webView?.evaluateJavascript("setEmbeddedChromeVisible(false)", null)
+        isMapExpanded = false
+        uiState = uiState.copy(isMapExpanded = false)
+        cachedSnapshotUri = null // מנקה cache ישן
     }
 
     // ───────────────────────────────────────────────────────────
@@ -545,8 +538,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendViaWhatsapp() {
         val coords = lastCoords ?: return
-        if (cachedSnapshotUri != null) launchWhatsappIntent(coords, cachedSnapshotUri)
-        else captureMapSnapshot { uri -> cachedSnapshotUri = uri; launchWhatsappIntent(coords, uri) }
+        // תמיד עושה clean capture חדש — מסיר UI overlays מה-WebView לפני הצילום
+        // ומחזיר אותם אחריו. לא מסתמך על cachedSnapshotUri כי הוא עלול להיות
+        // מצולם ממצב expand שכבר לא רלוונטי (המיקום השתנה מאז).
+        webView?.evaluateJavascript("setCleanCaptureMode(true)") {
+            webView?.postDelayed({
+                captureMapSnapshot { uri ->
+                    webView?.evaluateJavascript("setCleanCaptureMode(false)", null)
+                    cachedSnapshotUri = uri
+                    launchWhatsappIntent(coords, uri)
+                }
+            }, 150) // delay מספיק ל-WebView לרנדר ללא ה-UI overlays
+        }
     }
 
     private fun launchWhatsappIntent(coords: Coordinates, snapshotUri: Uri?) {
