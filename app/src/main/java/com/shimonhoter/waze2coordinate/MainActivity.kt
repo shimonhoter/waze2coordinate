@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.activity.compose.setContent
