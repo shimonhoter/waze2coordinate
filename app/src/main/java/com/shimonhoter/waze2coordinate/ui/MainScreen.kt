@@ -48,7 +48,6 @@ data class MainUiState(
     val isMapExpanded: Boolean = false,
     val mapHeightPx: Int       = 0,
     val isGpsFollowActive: Boolean = false,
-    val mapTopOffsetPx: Int    = 0,  // מיקום המפה בתוך ה-Box החיצוני
 )
 
 // ===== Callbacks =====
@@ -68,7 +67,6 @@ data class MainCallbacks(
     val onGpsCenter: () -> Unit               = {},
     val onGpsFollow: () -> Unit               = {},
     val onMapHeightMeasured: (Int) -> Unit    = {},
-    val onMapTopOffsetMeasured: (Int) -> Unit = {},
 )
 
 // ===== Root composable =====
@@ -81,32 +79,16 @@ fun MainScreen(
     AppTheme(darkTheme = uiState.isDarkTheme) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
 
-            // MapCard קריאה אחת בלבד — slot יחיד וקבוע ב-Compose tree.
-            // אם MapCard היה בתוך if/else, הWebView היה עובר בין שני parents שונים
-            // וגורם לקריסה. כאן ה-if/else הוא רק על הUI מסביב (header/input/result).
-            MapCard(
-                webView = webView,
-                mapHeightPx = uiState.mapHeightPx,
-                mapTopOffsetPx = uiState.mapTopOffsetPx,
-                isExpanded = uiState.isMapExpanded,
-                isGpsFollowActive = uiState.isGpsFollowActive,
-                onExpandMap = callbacks.onExpandMap,
-                onCollapseMap = callbacks.onCollapseMap,
-                onHeightDrag = callbacks.onMapHeightDrag,
-                onGpsCenter = callbacks.onGpsCenter,
-                onGpsFollow = callbacks.onGpsFollow,
-                onMapHeightMeasured = callbacks.onMapHeightMeasured,
-            )
-
-            // UI Overlay — רק כשלא מורחב
-            if (!uiState.isMapExpanded) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+            // Column רגיל — Header, Input, MapCard, Result בסדר נכון
+            // MapCard קריאה אחת בלבד (slot קבוע) — הWebView לא זזה בין parents
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (!uiState.isMapExpanded) {
                     HeaderRow(isDark = uiState.isDarkTheme, onToggleTheme = callbacks.onToggleTheme)
                     InputCard(
                         urlInput = uiState.urlInput, source = uiState.source,
@@ -114,18 +96,22 @@ fun MainScreen(
                         onUrlChange = callbacks.onUrlChange, onSourceChange = callbacks.onSourceChange,
                         onConvert = callbacks.onConvert,
                     )
-                    // Spacer ששומר מקום לאזור המפה + מדווח על מיקומו לצורך offset של MapCard
-                    val density = LocalDensity.current
-                    val mapSpace = with(density) {
-                        if (uiState.mapHeightPx > 0) uiState.mapHeightPx.toDp() + 18.dp else 258.dp
-                    }
-                    Spacer(Modifier
-                        .height(mapSpace)
-                        .onGloballyPositioned { coords ->
-                            val topPx = coords.positionInParent().y.toInt()
-                            callbacks.onMapTopOffsetMeasured(topPx)
-                        }
-                    )
+                }
+
+                MapCard(
+                    webView = webView,
+                    mapHeightPx = uiState.mapHeightPx,
+                    isExpanded = uiState.isMapExpanded,
+                    isGpsFollowActive = uiState.isGpsFollowActive,
+                    onExpandMap = callbacks.onExpandMap,
+                    onCollapseMap = callbacks.onCollapseMap,
+                    onHeightDrag = callbacks.onMapHeightDrag,
+                    onGpsCenter = callbacks.onGpsCenter,
+                    onGpsFollow = callbacks.onGpsFollow,
+                    onMapHeightMeasured = callbacks.onMapHeightMeasured,
+                )
+
+                if (!uiState.isMapExpanded) {
                     AnimatedVisibility(
                         visible = uiState.coordinates != null,
                         enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
@@ -156,7 +142,6 @@ fun MainScreen(
 private fun MapCard(
     webView: WebView,
     mapHeightPx: Int,
-    mapTopOffsetPx: Int,
     isExpanded: Boolean,
     isGpsFollowActive: Boolean,
     onExpandMap: () -> Unit,
@@ -168,14 +153,12 @@ private fun MapCard(
 ) {
     val density = LocalDensity.current
     val mapHeightDp = with(density) { if (mapHeightPx > 0) mapHeightPx.toDp() else 240.dp }
-    val mapTopOffsetDp = with(density) { mapTopOffsetPx.toDp() }
 
     val outerModifier = if (isExpanded)
         Modifier.fillMaxSize()
     else
         Modifier
             .fillMaxWidth()
-            .offset(y = mapTopOffsetDp)  // מיישר את המפה מתחת לheader+input
             .padding(horizontal = 12.dp)
             .clip(RoundedCornerShape(16.dp))
             .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
