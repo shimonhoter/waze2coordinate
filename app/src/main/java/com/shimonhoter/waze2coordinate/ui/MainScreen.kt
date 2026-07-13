@@ -20,6 +20,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.res.stringResource
@@ -30,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import com.shimonhoter.waze2coordinate.R
 import com.shimonhoter.waze2coordinate.Source
 
@@ -44,6 +47,7 @@ data class MainUiState(
     val isDarkTheme: Boolean   = false,
     val isMapExpanded: Boolean = false,
     val mapHeightPx: Int       = 0,
+    val isGpsFollowActive: Boolean = false,
 )
 
 // ===== Callbacks =====
@@ -60,6 +64,9 @@ data class MainCallbacks(
     val onExpandMap: () -> Unit               = {},
     val onCollapseMap: () -> Unit             = {},
     val onMapHeightDrag: (Int) -> Unit        = {},
+    val onGpsCenter: () -> Unit               = {},
+    val onGpsFollow: () -> Unit               = {},
+    val onMapHeightMeasured: (Int) -> Unit    = {},
 )
 
 // ===== Root composable =====
@@ -94,8 +101,13 @@ fun MainScreen(
                     webView = webView,
                     mapHeightPx = uiState.mapHeightPx,
                     isExpanded = uiState.isMapExpanded,
+                    isGpsFollowActive = uiState.isGpsFollowActive,
                     onExpandMap = callbacks.onExpandMap,
+                    onCollapseMap = callbacks.onCollapseMap,
                     onHeightDrag = callbacks.onMapHeightDrag,
+                    onGpsCenter = callbacks.onGpsCenter,
+                    onGpsFollow = callbacks.onGpsFollow,
+                    onMapHeightMeasured = callbacks.onMapHeightMeasured,
                 )
 
                 AnimatedVisibility(
@@ -116,20 +128,6 @@ fun MainScreen(
 
                 Spacer(Modifier.height(4.dp))
             }
-
-            // Collapse button overlay
-            AnimatedVisibility(
-                visible = uiState.isMapExpanded,
-                modifier = Modifier.align(Alignment.TopStart),
-                enter = fadeIn(), exit = fadeOut(),
-            ) {
-                SmallIconButton(
-                    iconRes = R.drawable.ic_collapse,
-                    contentDescription = "כווץ מפה",
-                    modifier = Modifier.padding(14.dp),
-                    onClick = callbacks.onCollapseMap,
-                )
-            }
         }
     }
 }
@@ -137,28 +135,39 @@ fun MainScreen(
 // ───────────────────────────────────────────────────────────────
 // MapCard — AndroidView קבוע בעמדה אחת בעץ
 // ───────────────────────────────────────────────────────────────
-// הכלל: factory רץ פעם אחת בלבד — הוא מחזיר את ה-webView שנוצר מראש ב-MainActivity.
-// Compose מעולם לא מוחק ויוצר מחדש את ה-AndroidView כל עוד ה-MapCard נמצא
-// באותו slot. ה-MapCard קיים ב-Column פעם אחת בלבד — לכן ה-slot יציב.
-// גובה/רוחב משתנים רק ב-Modifier — זה בטוח לחלוטין ולא מפעיל את factory שוב.
 @Composable
 private fun MapCard(
     webView: WebView,
     mapHeightPx: Int,
     isExpanded: Boolean,
+    isGpsFollowActive: Boolean,
     onExpandMap: () -> Unit,
+    onCollapseMap: () -> Unit,
     onHeightDrag: (Int) -> Unit,
+    onGpsCenter: () -> Unit,
+    onGpsFollow: () -> Unit,
+    onMapHeightMeasured: (Int) -> Unit,
 ) {
     val density = LocalDensity.current
     val mapHeightDp = with(density) { if (mapHeightPx > 0) mapHeightPx.toDp() else 240.dp }
 
+    // כשמורחב: fillMaxSize + zIndex גבוה כדי לכסות את ה-Column עם שאר ה-UI
     val containerModifier = if (isExpanded)
-        Modifier.fillMaxSize()
+        Modifier.fillMaxSize().zIndex(10f)
     else
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
             .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+            .onGloballyPositioned { coords ->
+                // מדידה אמיתית של גובה הרקע הזמין מתחת לUI העליון
+                val screenHeightPx = coords.parentCoordinates?.size?.height ?: return@onGloballyPositioned
+                val myTopPx = coords.positionInParent().y.toInt()
+                val resizeHandlePx = (18 * density.density).toInt()
+                val safetyPx = (8 * density.density).toInt()
+                val available = screenHeightPx - myTopPx - resizeHandlePx - safetyPx
+                if (available > 100) onMapHeightMeasured(available)
+            }
 
     Column(modifier = containerModifier) {
         Box(
@@ -167,17 +176,46 @@ private fun MapCard(
             else
                 Modifier.fillMaxWidth().height(mapHeightDp)
         ) {
-            // AndroidView — factory פשוט מחזיר את ה-webView הקיים, אינו יוצר אחד חדש
-            AndroidView(
-                factory = { webView },
-                modifier = Modifier.fillMaxSize(),
-            )
+            AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+
+            // כפתורי ה-GPS מוצגים native מחוץ ל-WebView (ה-WebView במצב embedded
+            // מסתיר את ה-GPS controls שבתוכו — נציג אותם כאן במקום)
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 8.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                SmallIconButton(
+                    iconRes = R.drawable.ic_navigate,
+                    contentDescription = "מרכז מיקום",
+                    onClick = onGpsCenter,
+                )
+                SmallIconButton(
+                    iconRes = if (isGpsFollowActive) R.drawable.ic_navigate else R.drawable.ic_navigate,
+                    contentDescription = "מעקב GPS",
+                    onClick = onGpsFollow,
+                    containerColor = if (isGpsFollowActive)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.surface,
+                )
+            }
+
+            // כפתור expand/collapse
             if (!isExpanded) {
                 SmallIconButton(
                     iconRes = R.drawable.ic_expand,
                     contentDescription = stringResource(R.string.btn_pick_on_map),
                     modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
                     onClick = onExpandMap,
+                )
+            } else {
+                SmallIconButton(
+                    iconRes = R.drawable.ic_collapse,
+                    contentDescription = "כווץ מפה",
+                    modifier = Modifier.align(Alignment.TopStart).padding(14.dp),
+                    onClick = onCollapseMap,
                 )
             }
         }
@@ -353,11 +391,21 @@ private fun ActionChip(label: String, iconRes: Int, modifier: Modifier, onClick:
 }
 
 @Composable
-fun SmallIconButton(iconRes: Int, contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun SmallIconButton(
+    iconRes: Int,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surface,
+) {
     FilledIconButton(onClick = onClick, modifier = modifier.size(34.dp),
         colors = IconButtonDefaults.filledIconButtonColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor   = MaterialTheme.colorScheme.onSurface)) {
+            containerColor = containerColor,
+            contentColor   = if (containerColor == MaterialTheme.colorScheme.surface)
+                MaterialTheme.colorScheme.onSurface
+            else
+                MaterialTheme.colorScheme.onPrimary,
+        )) {
         Icon(ImageVector.vectorResource(iconRes), contentDescription, modifier = Modifier.size(16.dp))
     }
 }

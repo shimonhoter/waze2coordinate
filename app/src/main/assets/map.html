@@ -538,23 +538,26 @@
 
 <script src="maplibre-gl.js"></script>
 <script>
-window.onerror = function(msg, src, line, col, err) {
-    document.body.innerHTML = '<div style="background:red;color:white;padding:20px;font-size:16px;direction:ltr;word-break:break-all;">' +
-        'JS ERROR:<br>' + msg + '<br>Source: ' + src + '<br>Line: ' + line + '</div>';
-    return false;
+// ===== DEBUG PANEL (מוסר בסיום פיתוח) =====
+window.onerror = function(msg, src, line) {
+    _dbg('❌ ' + msg + ' | ' + src + ':' + line);
 };
-if (typeof maplibregl === 'undefined') {
-    document.body.innerHTML = '<div style="background:orange;color:black;padding:20px;font-size:16px;">maplibre-gl.js FAILED TO LOAD</div>';
-} else {
-    var mapDiv = document.getElementById('map');
-    var info = 'maplibregl OK | map div: ' + (mapDiv ? mapDiv.offsetWidth + 'x' + mapDiv.offsetHeight : 'NOT FOUND');
-    document.title = info;
-    // הצג מידע על המסך
-    var dbg = document.createElement('div');
-    dbg.style.cssText = 'position:fixed;top:0;left:0;background:lime;color:black;padding:8px;font-size:12px;z-index:9999;';
-    dbg.innerText = info;
-    document.body.appendChild(dbg);
+function _dbg(msg) {
+    var p = document.getElementById('_dbgPanel');
+    if (!p) {
+        p = document.createElement('div');
+        p.id = '_dbgPanel';
+        p.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.85);color:#0f0;' +
+            'font-size:11px;font-family:monospace;padding:4px 8px;z-index:99999;max-height:120px;overflow-y:auto;direction:ltr;';
+        document.body.appendChild(p);
+    }
+    var line = document.createElement('div');
+    line.textContent = new Date().toTimeString().slice(0,8) + ' ' + msg;
+    p.appendChild(line);
+    p.scrollTop = p.scrollHeight;
 }
+window._dbg = _dbg;
+// ===========================================
 </script>
 <script>
 // [START: MapLogic]
@@ -564,40 +567,33 @@ var DEFAULT_LAT = 31.7683;
 var DEFAULT_LON = 35.2137;
 var DEFAULT_ZOOM = 8;
 
-// תוסף RTL חיוני - בלי זה MapLibre מציג טקסט עברי/ערבי הפוך (אותיות נכונות אך בכיוון
-// LTR): https://maplibre.org/maplibre-gl-js/docs/examples/add-support-for-right-to-left-scripts/
-// משתמשים בגרסה 0.2.3 (לא 0.3.0) - גרסת ה-0.3.0 ידועה כנכשלת בטעינה בחלק מהסביבות.
-maplibregl.setRTLTextPlugin(
-    'mapbox-gl-rtl-text.js',
-    true
-);
+_dbg('maplibregl v' + maplibregl.version + ' OK | map div: ' +
+    (document.getElementById('map') ? document.getElementById('map').offsetWidth + 'x' + document.getElementById('map').offsetHeight : 'NOT FOUND'));
 
-// OpenFreeMap - מקור אריחים וקטוריים חינמי ולא מוגבל (ללא מפתח API), מבוסס OpenStreetMap.
-// "liberty" הוא סטייל מודרני ועשיר יותר ויזואלית מהאריחים הראסטריים (תמונה) שהיו בשימוש קודם.
+maplibregl.setRTLTextPlugin('mapbox-gl-rtl-text.js', true);
+_dbg('RTL plugin registered');
+
 var STREET_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
-
-// אבחון: style רסטר פשוט שלא צריך glyphs/sprites
-var DIAGNOSTIC_STYLE = {
-    version: 8,
-    sources: {
-        'osm': {
-            type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-            tileSize: 256,
-            attribution: '&copy; OpenStreetMap'
-        }
-    },
-    layers: [{ id: 'osm-layer', type: 'raster', source: 'osm' }]
-};
 
 var map = new maplibregl.Map({
     container: 'map',
-    style: DIAGNOSTIC_STYLE,
+    style: STREET_STYLE_URL,
     center: [DEFAULT_LON, DEFAULT_LAT],
     zoom: DEFAULT_ZOOM,
     pitch: 0,
     attributionControl: true
 });
+
+map.on('load', function() {
+    _dbg('✅ map loaded | style: ' + currentMapStyle);
+    setupShapesSourceAndLayers();
+    setUiMode('select');
+});
+
+map.on('error', function(e) {
+    _dbg('❌ map error: ' + (e.error ? e.error.message : JSON.stringify(e)));
+});
+
 map.addControl(new maplibregl.NavigationControl(), 'top-left');
 
 // סגנון המפה הנוכחי: 'street' | 'satellite' | 'hiking' | 'mtb'
@@ -618,6 +614,7 @@ var IHM_MTB_URL    = 'https://israelhiking.osm.org.il/Hebrew/mtbTiles/{z}/{x}/{y
 function switchMapStyle(style) {
     closeAllPopups();
     if (style === currentMapStyle) return;
+    _dbg('🗺 switching style: ' + currentMapStyle + ' → ' + style);
     currentMapStyle = style;
 
     if (style === 'street') {
@@ -2171,10 +2168,6 @@ function setCleanCaptureMode(enabled) {
     document.body.classList.toggle('clean-capture-mode', enabled);
 }
 
-map.on('load', function() {
-    setupShapesSourceAndLayers();
-    setUiMode('select');
-});
 // [END: MapLogic]
 
 </script>

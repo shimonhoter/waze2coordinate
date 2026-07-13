@@ -129,6 +129,15 @@ class MainActivity : AppCompatActivity() {
                         embeddedMapHeightPx = (embeddedMapHeightPx + delta).coerceIn(min, max)
                         uiState = uiState.copy(mapHeightPx = embeddedMapHeightPx)
                     },
+                    onGpsCenter         = ::requestLocationAndCenter,
+                    onGpsFollow         = ::toggleGpsFollow,
+                    onMapHeightMeasured = { measuredPx ->
+                        if (embeddedMapHeightPx == 0) {
+                            embeddedMapHeightPx = measuredPx
+                            uiState = uiState.copy(mapHeightPx = measuredPx)
+                            _dbg("📐 map height measured: ${measuredPx}px")
+                        }
+                    },
                 ),
             )
         }
@@ -165,6 +174,11 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putBoolean("dark_mode", !isDark).apply()
         uiState = uiState.copy(isDarkTheme = !isDark)
         // אין צורך ב-recreate() — Compose מגיב לשינוי isDarkTheme ב-state ישירות
+    }
+
+    private fun _dbg(msg: String) {
+        webView?.evaluateJavascript("if(window._dbg)window._dbg(${JSONObject.quote("[KT] $msg")})", null)
+        android.util.Log.d("W2C_DEBUG", msg)
     }
 
     // ───────────────────────────────────────────────────────────
@@ -331,6 +345,7 @@ class MainActivity : AppCompatActivity() {
             lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, listener, Looper.getMainLooper())
             isGpsFollowActive = true
             webView?.evaluateJavascript("setGpsFollowUiState(true)", null)
+            uiState = uiState.copy(isGpsFollowActive = true)
             Toast.makeText(this, getString(R.string.gps_follow_on), Toast.LENGTH_SHORT).show()
         } catch (e: SecurityException) {
             Toast.makeText(this, getString(R.string.error_location_permission_denied), Toast.LENGTH_SHORT).show()
@@ -343,6 +358,7 @@ class MainActivity : AppCompatActivity() {
         }
         gpsFollowListener = null; isGpsFollowActive = false
         webView?.evaluateJavascript("setGpsFollowUiState(false)", null)
+        uiState = uiState.copy(isGpsFollowActive = false)
         Toast.makeText(this, getString(R.string.gps_follow_off), Toast.LENGTH_SHORT).show()
     }
 
