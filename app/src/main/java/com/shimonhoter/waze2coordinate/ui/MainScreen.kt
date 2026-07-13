@@ -78,26 +78,8 @@ fun MainScreen(
 ) {
     AppTheme(darkTheme = uiState.isDarkTheme) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-
-            // ── MapCard תמיד ראשון בBox — slot קבוע, לא זזה ──────────
-            // כשמורחב: ממלא את כל המסך
-            // כשמוטמע: גובה מוגדר, ממוקם אחרי ה-UI העליון ע"י הColumn
-            MapCard(
-                webView = webView,
-                mapHeightPx = uiState.mapHeightPx,
-                isExpanded = uiState.isMapExpanded,
-                isGpsFollowActive = uiState.isGpsFollowActive,
-                onExpandMap = callbacks.onExpandMap,
-                onCollapseMap = callbacks.onCollapseMap,
-                onHeightDrag = callbacks.onMapHeightDrag,
-                onGpsCenter = callbacks.onGpsCenter,
-                onGpsFollow = callbacks.onGpsFollow,
-                onMapHeightMeasured = callbacks.onMapHeightMeasured,
-            )
-
-            // ── UI Overlay — header/input/result מעל המפה ─────────────
-            // מוסתר כשמורחב, מוצג כשמוטמע
             if (!uiState.isMapExpanded) {
+                // מצב רגיל — Column עם כל ה-UI
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -106,22 +88,19 @@ fun MainScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     HeaderRow(isDark = uiState.isDarkTheme, onToggleTheme = callbacks.onToggleTheme)
-
                     InputCard(
                         urlInput = uiState.urlInput, source = uiState.source,
                         isLoading = uiState.isLoading, errorMessage = uiState.errorMessage,
                         onUrlChange = callbacks.onUrlChange, onSourceChange = callbacks.onSourceChange,
                         onConvert = callbacks.onConvert,
                     )
-
-                    // Spacer ששומר מקום עבור המפה בתוך הscroll
-                    val density = LocalDensity.current
-                    val mapSpacerDp = with(density) {
-                        if (uiState.mapHeightPx > 0) uiState.mapHeightPx.toDp() + 18.dp
-                        else 258.dp
-                    }
-                    Spacer(Modifier.height(mapSpacerDp))
-
+                    MapCard(
+                        webView = webView, mapHeightPx = uiState.mapHeightPx, isExpanded = false,
+                        isGpsFollowActive = uiState.isGpsFollowActive,
+                        onExpandMap = callbacks.onExpandMap, onCollapseMap = callbacks.onCollapseMap,
+                        onHeightDrag = callbacks.onMapHeightDrag, onGpsCenter = callbacks.onGpsCenter,
+                        onGpsFollow = callbacks.onGpsFollow, onMapHeightMeasured = callbacks.onMapHeightMeasured,
+                    )
                     AnimatedVisibility(
                         visible = uiState.coordinates != null,
                         enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
@@ -139,6 +118,15 @@ fun MainScreen(
                     }
                     Spacer(Modifier.height(4.dp))
                 }
+            } else {
+                // Fullscreen — MapCard לבד ממלא את כל ה-Box
+                MapCard(
+                    webView = webView, mapHeightPx = uiState.mapHeightPx, isExpanded = true,
+                    isGpsFollowActive = uiState.isGpsFollowActive,
+                    onExpandMap = callbacks.onExpandMap, onCollapseMap = callbacks.onCollapseMap,
+                    onHeightDrag = callbacks.onMapHeightDrag, onGpsCenter = callbacks.onGpsCenter,
+                    onGpsFollow = callbacks.onGpsFollow, onMapHeightMeasured = callbacks.onMapHeightMeasured,
+                )
             }
         }
     }
