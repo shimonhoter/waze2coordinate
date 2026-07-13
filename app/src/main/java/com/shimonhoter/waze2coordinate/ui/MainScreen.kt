@@ -171,7 +171,6 @@ private fun MapCard(
                 val resizeH = with(density) { 18.dp.roundToPx() }
                 val safetyH = with(density) { 8.dp.roundToPx() }
                 val available = screenHeightPx - myTopInWindow - resizeH - safetyH
-                _dbg("📐 screenH=$screenHeightPx myTop=$myTopInWindow avail=$available")
                 if (available > 80) onMapHeightMeasured(available)
             }
 

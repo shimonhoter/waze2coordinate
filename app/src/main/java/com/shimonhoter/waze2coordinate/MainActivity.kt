@@ -135,6 +135,7 @@ class MainActivity : AppCompatActivity() {
                         if (measuredPx != embeddedMapHeightPx) {
                             embeddedMapHeightPx = measuredPx
                             uiState = uiState.copy(mapHeightPx = measuredPx)
+                            _dbg("📐 map height: ${measuredPx}px")
                         }
                     },
                 ),
