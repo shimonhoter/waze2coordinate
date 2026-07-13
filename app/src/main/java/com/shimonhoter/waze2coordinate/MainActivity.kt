@@ -195,7 +195,7 @@ class MainActivity : AppCompatActivity() {
         val density = resources.displayMetrics.density
         val screenHeight = resources.displayMetrics.heightPixels
         // גובה משוער של header + input card + resize handle + margins (dp → px)
-        val topContentEstimatePx = (280 * density).toInt()
+        val topContentEstimatePx = (200 * density).toInt()
         val resizeHandlePx = (18 * density).toInt()
         val safetyPx = (8 * density).toInt()
 
