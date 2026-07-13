@@ -138,6 +138,12 @@ class MainActivity : AppCompatActivity() {
                             _dbg("📐 map height measured: ${measuredPx}px")
                         }
                     },
+                    onMapTopOffsetMeasured = { offsetPx ->
+                        if (uiState.mapTopOffsetPx != offsetPx) {
+                            uiState = uiState.copy(mapTopOffsetPx = offsetPx)
+                            _dbg("📐 map top offset: ${offsetPx}px")
+                        }
+                    },
                 ),
             )
         }
