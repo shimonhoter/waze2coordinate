@@ -22,7 +22,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -153,6 +155,7 @@ private fun MapCard(
 ) {
     val density = LocalDensity.current
     val mapHeightDp = with(density) { if (mapHeightPx > 0) mapHeightPx.toDp() else 240.dp }
+    val screenHeightPx = LocalView.current.height
 
     val outerModifier = if (isExpanded)
         Modifier.fillMaxSize()
@@ -163,11 +166,12 @@ private fun MapCard(
             .clip(RoundedCornerShape(16.dp))
             .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
             .onGloballyPositioned { coords ->
-                val parentH = coords.parentLayoutCoordinates?.size?.height ?: return@onGloballyPositioned
-                val myTop = coords.positionInParent().y.toInt()
+                // מחשב את הגובה הזמין מתחת ל-MapCard עד תחתית המסך
+                val myTopInWindow = coords.positionInWindow().y.toInt()
                 val resizeH = with(density) { 18.dp.roundToPx() }
                 val safetyH = with(density) { 8.dp.roundToPx() }
-                val available = parentH - myTop - resizeH - safetyH
+                val available = screenHeightPx - myTopInWindow - resizeH - safetyH
+                _dbg("📐 screenH=$screenHeightPx myTop=$myTopInWindow avail=$available")
                 if (available > 80) onMapHeightMeasured(available)
             }
 

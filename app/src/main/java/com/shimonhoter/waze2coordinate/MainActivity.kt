@@ -132,10 +132,9 @@ class MainActivity : AppCompatActivity() {
                     onGpsCenter         = ::requestLocationAndCenter,
                     onGpsFollow         = ::toggleGpsFollow,
                     onMapHeightMeasured = { measuredPx ->
-                        if (embeddedMapHeightPx == 0) {
+                        if (measuredPx != embeddedMapHeightPx) {
                             embeddedMapHeightPx = measuredPx
                             uiState = uiState.copy(mapHeightPx = measuredPx)
-                            _dbg("📐 map height measured: ${measuredPx}px")
                         }
                     },
                 ),
