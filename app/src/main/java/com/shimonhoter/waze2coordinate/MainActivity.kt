@@ -7,13 +7,9 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.Rect
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.view.PixelCopy
 import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -567,17 +563,21 @@ class MainActivity : AppCompatActivity() {
     // Map snapshot (PixelCopy)
     // ───────────────────────────────────────────────────────────
 
+    // Map snapshot — משתמש ב-WebView.draw() ישירות על Canvas במקום PixelCopy.
+    // PixelCopy דורש rect מדויק בקואורדינטות החלון, שב-Compose קשה לחשב נכון.
+    // draw() מצייר את תוכן ה-WebView עצמו ישירות — לא תלוי במיקום על המסך.
     private fun captureMapSnapshot(onResult: (Uri?) -> Unit) {
         val wv = webView ?: return onResult(null)
         if (wv.width == 0 || wv.height == 0) return onResult(null)
         try {
-            val loc = IntArray(2); wv.getLocationInWindow(loc)
-            val rect = Rect(loc[0], loc[1], loc[0] + wv.width, loc[1] + wv.height)
             val bmp = Bitmap.createBitmap(wv.width, wv.height, Bitmap.Config.ARGB_8888)
-            PixelCopy.request(window, rect, bmp, { res ->
-                onResult(if (res == PixelCopy.SUCCESS) saveBitmapAndGetUri(bmp) else null)
-            }, Handler(Looper.getMainLooper()))
-        } catch (e: Exception) { onResult(null) }
+            val canvas = android.graphics.Canvas(bmp)
+            wv.draw(canvas)
+            onResult(saveBitmapAndGetUri(bmp))
+        } catch (e: Exception) {
+            _dbg("❌ snapshot error: ${e.message}")
+            onResult(null)
+        }
     }
 
     private fun saveBitmapAndGetUri(bmp: Bitmap): Uri? = try {
