@@ -564,17 +564,40 @@ class MainActivity : AppCompatActivity() {
     // Map snapshot (PixelCopy)
     // ───────────────────────────────────────────────────────────
 
-    // Map snapshot — משתמש ב-WebView.draw() ישירות על Canvas במקום PixelCopy.
-    // PixelCopy דורש rect מדויק בקואורדינטות החלון, שב-Compose קשה לחשב נכון.
-    // draw() מצייר את תוכן ה-WebView עצמו ישירות — לא תלוי במיקום על המסך.
     private fun captureMapSnapshot(onResult: (Uri?) -> Unit) {
         val wv = webView ?: return onResult(null)
         if (wv.width == 0 || wv.height == 0) return onResult(null)
         try {
+            // getLocationOnScreen מחזיר מיקום ב-screen coordinates (כולל status bar)
+            // PixelCopy.request עם window דורש קואורדינטות ב-window coordinates (ללא status bar)
+            // ההפרש: גובה ה-status bar
+            val screenLoc = IntArray(2)
+            wv.getLocationOnScreen(screenLoc)
+            val windowLoc = IntArray(2)
+            wv.getLocationInWindow(windowLoc)
+            // statusBarOffset = הפרש בין screen ל-window (גובה ה-status bar)
+            val statusBarOffset = screenLoc[1] - windowLoc[1]
+            val rectInWindow = android.graphics.Rect(
+                windowLoc[0],
+                windowLoc[1],
+                windowLoc[0] + wv.width,
+                windowLoc[1] + wv.height
+            )
+            _dbg("📸 rect=$rectInWindow statusBar=$statusBarOffset wvSize=${wv.width}x${wv.height}")
             val bmp = Bitmap.createBitmap(wv.width, wv.height, Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(bmp)
-            wv.draw(canvas)
-            onResult(saveBitmapAndGetUri(bmp))
+            android.view.PixelCopy.request(window, rectInWindow, bmp, { res ->
+                if (res == android.view.PixelCopy.SUCCESS) {
+                    _dbg("📸 PixelCopy OK")
+                    onResult(saveBitmapAndGetUri(bmp))
+                } else {
+                    _dbg("📸 PixelCopy failed ($res), fallback to draw()")
+                    // Fallback: draw() — עלול לא לעבוד עם hardware acceleration
+                    val bmp2 = Bitmap.createBitmap(wv.width, wv.height, Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(bmp2)
+                    wv.draw(canvas)
+                    onResult(saveBitmapAndGetUri(bmp2))
+                }
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
         } catch (e: Exception) {
             _dbg("❌ snapshot error: ${e.message}")
             onResult(null)
