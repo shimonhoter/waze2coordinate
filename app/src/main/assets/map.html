@@ -499,6 +499,15 @@
         <div class="toolbar-tooltip">הטיית מפה ל-3D (פרספקטיבה)</div>
     </div>
 
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-item">
+        <button class="toolbar-btn" id="btnMeasure">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21,6L3,6v2h1v2h2V8h2v4h2V8h2v2h2V8h2v4h2V8h1V6zM3,16h18v2H3z"/></svg>
+        </button>
+        <div class="toolbar-tooltip">מדידת מרחק בין נקודות</div>
+    </div>
+
 </div>
 
 <div class="measure-readout" id="measureReadout"></div>
@@ -790,6 +799,7 @@ function setUiMode(mode) {
     currentDrawTool = null;
     cancelInProgressDrawing();
     clearVertexHandles();
+    if (isMeasureMode) stopMeasureMode();
 
     document.querySelectorAll('.toolbar-btn[data-mode]').forEach(function(btn) {
         btn.classList.toggle('active', btn.dataset.mode === mode);
@@ -832,6 +842,10 @@ document.querySelectorAll('#drawToolPopup [data-tool]').forEach(function(btn) {
 
 // הקשה על המפה - מתפרשת אך ורק לפי המצב הנוכחי
 map.on('click', function(e) {
+    if (isMeasureMode) {
+        handleMeasureClick(e.lngLat);
+        return;
+    }
     if (currentMode === 'select') {
         var lat = e.lngLat.lat.toFixed(6);
         var lon = e.lngLat.lng.toFixed(6);
@@ -874,6 +888,90 @@ document.getElementById('btnTilt3D').addEventListener('click', function() {
     is3DTiltActive = !is3DTiltActive;
     this.classList.toggle('active', is3DTiltActive);
     map.easeTo({ pitch: is3DTiltActive ? 55 : 0, duration: 500 });
+});
+
+// ===== כלי מדידה =====
+var isMeasureMode = false;
+var measurePoints = [];
+var measureMarkers = [];
+var measureSourceId = 'measure-line';
+
+function startMeasureMode() {
+    isMeasureMode = true;
+    measurePoints = [];
+    measureMarkers.forEach(function(m) { m.remove(); });
+    measureMarkers = [];
+    clearMeasureLayer();
+    document.getElementById('btnMeasure').classList.add('active');
+    document.getElementById('mapHintText').textContent = 'הקש על המפה להוספת נקודת מדידה. לחץ שוב על הכפתור לסיום.';
+    document.getElementById('measureReadout').classList.add('visible');
+    document.getElementById('measureReadout').textContent = 'מדידה: הקש על המפה...';
+    _dbg('📏 measure mode ON');
+}
+
+function stopMeasureMode() {
+    isMeasureMode = false;
+    measurePoints = [];
+    measureMarkers.forEach(function(m) { m.remove(); });
+    measureMarkers = [];
+    clearMeasureLayer();
+    document.getElementById('btnMeasure').classList.remove('active');
+    document.getElementById('measureReadout').classList.remove('visible');
+    document.getElementById('mapHintText').textContent = 'הקש על המפה לבחירת מיקום';
+    _dbg('📏 measure mode OFF');
+}
+
+function clearMeasureLayer() {
+    if (map.getLayer(measureSourceId)) map.removeLayer(measureSourceId);
+    if (map.getLayer(measureSourceId + '-pts')) map.removeLayer(measureSourceId + '-pts');
+    if (map.getSource(measureSourceId)) map.removeSource(measureSourceId);
+}
+
+function updateMeasureLayer() {
+    clearMeasureLayer();
+    if (measurePoints.length < 2) return;
+    map.addSource(measureSourceId, {
+        type: 'geojson',
+        data: { type: 'Feature', geometry: { type: 'LineString', coordinates: measurePoints } }
+    });
+    map.addLayer({ id: measureSourceId, type: 'line', source: measureSourceId,
+        paint: { 'line-color': '#e74c3c', 'line-width': 2, 'line-dasharray': [2, 1] } });
+}
+
+function handleMeasureClick(lngLat) {
+    var pt = [lngLat.lng, lngLat.lat];
+    measurePoints.push(pt);
+
+    // מרקר מספר
+    var el = document.createElement('div');
+    el.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#e74c3c;' +
+        'color:#fff;font-size:11px;font-weight:bold;display:flex;align-items:center;' +
+        'justify-content:center;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.5);';
+    el.textContent = measurePoints.length;
+    measureMarkers.push(new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(pt).addTo(map));
+
+    updateMeasureLayer();
+
+    // חישוב מרחק כולל
+    var totalDist = 0;
+    for (var i = 1; i < measurePoints.length; i++) {
+        totalDist += haversineDistance(
+            measurePoints[i-1][1], measurePoints[i-1][0],
+            measurePoints[i][1], measurePoints[i][0]
+        );
+    }
+    var readout = document.getElementById('measureReadout');
+    readout.textContent = 'מרחק כולל: ' + formatDistance(totalDist) +
+        (measurePoints.length > 1 ? ' (' + measurePoints.length + ' נקודות)' : '');
+    _dbg('📏 ' + measurePoints.length + ' pts, total: ' + formatDistance(totalDist));
+}
+
+document.getElementById('btnMeasure').addEventListener('click', function() {
+    if (isMeasureMode) stopMeasureMode();
+    else {
+        setUiMode('select'); // יצא ממצבי ציור/עריכה
+        startMeasureMode();
+    }
 });
 
 // ===== הגדרות ברירת מחדל לסימונים ותוויות טקסט =====

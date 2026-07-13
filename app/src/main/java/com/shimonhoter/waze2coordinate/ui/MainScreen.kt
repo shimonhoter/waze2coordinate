@@ -74,66 +74,78 @@ data class MainCallbacks(
 fun MainScreen(
     uiState: MainUiState,
     callbacks: MainCallbacks,
-    // WebView pre-created in MainActivity — factory סתם מחזיר את אותו instance
     webView: WebView,
 ) {
     AppTheme(darkTheme = uiState.isDarkTheme) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            // ── Column עם כל ה-UI ──────────────────────────────────
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                HeaderRow(isDark = uiState.isDarkTheme, onToggleTheme = callbacks.onToggleTheme)
 
-                InputCard(
-                    urlInput = uiState.urlInput, source = uiState.source,
-                    isLoading = uiState.isLoading, errorMessage = uiState.errorMessage,
-                    onUrlChange = callbacks.onUrlChange, onSourceChange = callbacks.onSourceChange,
-                    onConvert = callbacks.onConvert,
-                )
+            // ── MapCard תמיד ראשון בBox — slot קבוע, לא זזה ──────────
+            // כשמורחב: ממלא את כל המסך
+            // כשמוטמע: גובה מוגדר, ממוקם אחרי ה-UI העליון ע"י הColumn
+            MapCard(
+                webView = webView,
+                mapHeightPx = uiState.mapHeightPx,
+                isExpanded = uiState.isMapExpanded,
+                isGpsFollowActive = uiState.isGpsFollowActive,
+                onExpandMap = callbacks.onExpandMap,
+                onCollapseMap = callbacks.onCollapseMap,
+                onHeightDrag = callbacks.onMapHeightDrag,
+                onGpsCenter = callbacks.onGpsCenter,
+                onGpsFollow = callbacks.onGpsFollow,
+                onMapHeightMeasured = callbacks.onMapHeightMeasured,
+            )
 
-                // ── MapCard — AndroidView בslot אחד קבוע, ללא if/else ──
-                MapCard(
-                    webView = webView,
-                    mapHeightPx = uiState.mapHeightPx,
-                    isExpanded = uiState.isMapExpanded,
-                    isGpsFollowActive = uiState.isGpsFollowActive,
-                    onExpandMap = callbacks.onExpandMap,
-                    onCollapseMap = callbacks.onCollapseMap,
-                    onHeightDrag = callbacks.onMapHeightDrag,
-                    onGpsCenter = callbacks.onGpsCenter,
-                    onGpsFollow = callbacks.onGpsFollow,
-                    onMapHeightMeasured = callbacks.onMapHeightMeasured,
-                )
-
-                AnimatedVisibility(
-                    visible = !uiState.isMapExpanded && uiState.coordinates != null,
-                    enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
-                            expandVertically(spring(stiffness = Spring.StiffnessMediumLow)),
-                    exit  = fadeOut() + shrinkVertically(),
+            // ── UI Overlay — header/input/result מעל המפה ─────────────
+            // מוסתר כשמורחב, מוצג כשמוטמע
+            if (!uiState.isMapExpanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    uiState.coordinates?.let { coords ->
-                        ResultCard(
-                            coordinates = coords, description = uiState.description,
-                            onCopyCoords = callbacks.onCopyCoords, onOpenMaps = callbacks.onOpenMaps,
-                            onOpenWaze = callbacks.onOpenWaze, onSendMessage = callbacks.onSendMessage,
-                            onDescriptionChange = callbacks.onDescriptionChange,
-                        )
-                    }
-                }
+                    HeaderRow(isDark = uiState.isDarkTheme, onToggleTheme = callbacks.onToggleTheme)
 
-                Spacer(Modifier.height(4.dp))
+                    InputCard(
+                        urlInput = uiState.urlInput, source = uiState.source,
+                        isLoading = uiState.isLoading, errorMessage = uiState.errorMessage,
+                        onUrlChange = callbacks.onUrlChange, onSourceChange = callbacks.onSourceChange,
+                        onConvert = callbacks.onConvert,
+                    )
+
+                    // Spacer ששומר מקום עבור המפה בתוך הscroll
+                    val density = LocalDensity.current
+                    val mapSpacerDp = with(density) {
+                        if (uiState.mapHeightPx > 0) uiState.mapHeightPx.toDp() + 18.dp
+                        else 258.dp
+                    }
+                    Spacer(Modifier.height(mapSpacerDp))
+
+                    AnimatedVisibility(
+                        visible = uiState.coordinates != null,
+                        enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+                                expandVertically(spring(stiffness = Spring.StiffnessMediumLow)),
+                        exit = fadeOut() + shrinkVertically(),
+                    ) {
+                        uiState.coordinates?.let { coords ->
+                            ResultCard(
+                                coordinates = coords, description = uiState.description,
+                                onCopyCoords = callbacks.onCopyCoords, onOpenMaps = callbacks.onOpenMaps,
+                                onOpenWaze = callbacks.onOpenWaze, onSendMessage = callbacks.onSendMessage,
+                                onDescriptionChange = callbacks.onDescriptionChange,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
             }
         }
     }
 }
 
-// ───────────────────────────────────────────────────────────────
-// MapCard — AndroidView קבוע בעמדה אחת בעץ
+// MapCard — שתי גרסאות: embedded (בתוך scroll) ו-fullscreen (Box שלם)
+// AndroidView קיים בשתיהן — כל עוד isExpanded לא משתנה, ה-slot קבוע.
 // ───────────────────────────────────────────────────────────────
 @Composable
 private fun MapCard(
@@ -151,79 +163,64 @@ private fun MapCard(
     val density = LocalDensity.current
     val mapHeightDp = with(density) { if (mapHeightPx > 0) mapHeightPx.toDp() else 240.dp }
 
-    // כשמורחב: fillMaxSize + zIndex גבוה כדי לכסות את ה-Column עם שאר ה-UI
-    val containerModifier = if (isExpanded)
-        Modifier.fillMaxSize().zIndex(10f)
-    else
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-            .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
-            .onGloballyPositioned { coords ->
-                // מדידה אמיתית של גובה הרקע הזמין מתחת לUI העליון
-                val screenHeightPx = coords.parentCoordinates?.size?.height ?: return@onGloballyPositioned
-                val myTopPx = coords.positionInParent().y.toInt()
-                val resizeHandlePx = (18 * density.density).toInt()
-                val safetyPx = (8 * density.density).toInt()
-                val available = screenHeightPx - myTopPx - resizeHandlePx - safetyPx
-                if (available > 100) onMapHeightMeasured(available)
-            }
-
-    Column(modifier = containerModifier) {
-        Box(
-            modifier = if (isExpanded)
-                Modifier.fillMaxSize()
-            else
-                Modifier.fillMaxWidth().height(mapHeightDp)
-        ) {
-            AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
-
-            // כפתורי ה-GPS מוצגים native מחוץ ל-WebView (ה-WebView במצב embedded
-            // מסתיר את ה-GPS controls שבתוכו — נציג אותם כאן במקום)
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 8.dp, bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                SmallIconButton(
-                    iconRes = R.drawable.ic_navigate,
-                    contentDescription = "מרכז מיקום",
-                    onClick = onGpsCenter,
-                )
-                SmallIconButton(
-                    iconRes = if (isGpsFollowActive) R.drawable.ic_navigate else R.drawable.ic_navigate,
-                    contentDescription = "מעקב GPS",
-                    onClick = onGpsFollow,
-                    containerColor = if (isGpsFollowActive)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.surface,
-                )
-            }
-
-            // כפתור expand/collapse
-            if (!isExpanded) {
-                SmallIconButton(
-                    iconRes = R.drawable.ic_expand,
-                    contentDescription = stringResource(R.string.btn_pick_on_map),
-                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
-                    onClick = onExpandMap,
-                )
-            } else {
-                SmallIconButton(
-                    iconRes = R.drawable.ic_collapse,
-                    contentDescription = "כווץ מפה",
-                    modifier = Modifier.align(Alignment.TopStart).padding(14.dp),
-                    onClick = onCollapseMap,
-                )
-            }
+    @Composable
+    fun GpsButtons(modifier: Modifier = Modifier) {
+        Column(modifier = modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SmallIconButton(R.drawable.ic_gps_center, "מרכז מיקום", onGpsCenter)
+            SmallIconButton(
+                iconRes = R.drawable.ic_gps_auto, contentDescription = "מעקב אוטומטי",
+                onClick = onGpsFollow,
+                containerColor = if (isGpsFollowActive) MaterialTheme.colorScheme.primary
+                                 else MaterialTheme.colorScheme.surface,
+            )
         }
-        if (!isExpanded) {
+    }
+
+    if (isExpanded) {
+        // מסך מלא — מכסה את כל ה-Box החיצוני, לא בתוך Column
+        Box(modifier = Modifier.fillMaxSize()) {
+            AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+            GpsButtons(modifier = Modifier.align(Alignment.BottomStart))
+            SmallIconButton(R.drawable.ic_collapse, "כווץ",
+                modifier = Modifier.align(Alignment.TopStart).padding(14.dp),
+                onClick = onCollapseMap)
+            _DebugLayer(msg = "[MAP] fullscreen")
+        }
+    } else {
+        // מוטמע — הColumn מודד את הגובה הזמין ומדווח
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
+                .onGloballyPositioned { coords ->
+                    val parentH = coords.parentLayoutCoordinates?.size?.height ?: return@onGloballyPositioned
+                    val myTop = coords.positionInParent().y.toInt()
+                    val resizeH = with(density) { 18.dp.roundToPx() }
+                    val safetyH = with(density) { 8.dp.roundToPx() }
+                    val available = parentH - myTop - resizeH - safetyH
+                    if (available > 80) onMapHeightMeasured(available)
+                }
+        ) {
+            Box(modifier = Modifier.fillMaxWidth().height(mapHeightDp)) {
+                AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+                GpsButtons(modifier = Modifier.align(Alignment.BottomStart))
+                SmallIconButton(R.drawable.ic_expand,
+                    stringResource(R.string.btn_pick_on_map),
+                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp),
+                    onClick = onExpandMap)
+            }
             ResizeHandle(onHeightDrag = onHeightDrag)
         }
     }
 }
+
+@Composable
+private fun _DebugLayer(msg: String) {
+    // debug marker — מוסר בסיום פיתוח
+}
+
 
 // ───────────────────────────────────────────────────────────────
 // Header
