@@ -544,6 +544,15 @@ window.onerror = function(msg, src, line, col, err) {
 };
 if (typeof maplibregl === 'undefined') {
     document.body.innerHTML = '<div style="background:orange;color:black;padding:20px;font-size:16px;">maplibre-gl.js FAILED TO LOAD</div>';
+} else {
+    var mapDiv = document.getElementById('map');
+    var info = 'maplibregl OK | map div: ' + (mapDiv ? mapDiv.offsetWidth + 'x' + mapDiv.offsetHeight : 'NOT FOUND');
+    document.title = info;
+    // הצג מידע על המסך
+    var dbg = document.createElement('div');
+    dbg.style.cssText = 'position:fixed;top:0;left:0;background:lime;color:black;padding:8px;font-size:12px;z-index:9999;';
+    dbg.innerText = info;
+    document.body.appendChild(dbg);
 }
 </script>
 <script>
