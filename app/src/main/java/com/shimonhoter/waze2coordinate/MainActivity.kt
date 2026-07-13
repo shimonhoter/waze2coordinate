@@ -264,17 +264,41 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface fun onRequestCloseMap() = runOnUiThread { if (isMapExpanded) collapseMap() }
     }
 
+    private var fullscreenFrame: android.widget.FrameLayout? = null
+
     private fun expandMap() {
         isMapExpanded = true
-        uiState = uiState.copy(isMapExpanded = true)
         webView?.evaluateJavascript("setEmbeddedChromeVisible(true)", null)
+
+        // מוציא את ה-WebView מה-Compose ושם אותו ב-FrameLayout שמכסה את כל המסך
+        val wv = webView ?: return
+        (wv.parent as? android.view.ViewGroup)?.removeView(wv)
+
+        val frame = android.widget.FrameLayout(this)
+        frame.addView(wv, android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+        ))
+        fullscreenFrame = frame
+        addContentView(frame, android.view.WindowManager.LayoutParams(
+            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+        ))
+        uiState = uiState.copy(isMapExpanded = true)
     }
 
     private fun collapseMap() {
+        // מחזיר את ה-WebView ל-Compose (AndroidView יחזור לקחת אותו)
+        val wv = webView ?: return
+        val frame = fullscreenFrame
+        frame?.removeView(wv)
+        (frame?.parent as? android.view.ViewGroup)?.removeView(frame)
+        fullscreenFrame = null
+
         webView?.evaluateJavascript("setEmbeddedChromeVisible(false)", null)
         isMapExpanded = false
         uiState = uiState.copy(isMapExpanded = false)
-        cachedSnapshotUri = null // מנקה cache ישן
+        cachedSnapshotUri = null
     }
 
     // ───────────────────────────────────────────────────────────

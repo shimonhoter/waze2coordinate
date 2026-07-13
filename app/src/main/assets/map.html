@@ -547,18 +547,22 @@
 
 <script src="maplibre-gl.js"></script>
 <script>
-// ===== DEBUG PANEL (מוסר בסיום פיתוח) =====
-window.onerror = function(msg, src, line) {
-    _dbg('❌ ' + msg + ' | ' + src + ':' + line);
-};
+// ===== DEBUG PANEL (נסתר כברירת מחדל — 5 לחיצות על הפינה השמאלית-תחתונה לפתיחה) =====
+var _dbgTapCount = 0, _dbgTapTimer = null;
 function _dbg(msg) {
     var p = document.getElementById('_dbgPanel');
     if (!p) {
         p = document.createElement('div');
         p.id = '_dbgPanel';
         p.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.85);color:#0f0;' +
-            'font-size:11px;font-family:monospace;padding:4px 8px;z-index:99999;max-height:120px;overflow-y:auto;direction:ltr;';
+            'font-size:11px;font-family:monospace;padding:4px 8px;z-index:99999;max-height:120px;overflow-y:auto;direction:ltr;display:none;';
         document.body.appendChild(p);
+        // כפתור סגירה
+        var closeBtn = document.createElement('div');
+        closeBtn.style.cssText = 'position:absolute;top:4px;right:8px;color:#f00;cursor:pointer;font-size:14px;';
+        closeBtn.textContent = '✕';
+        closeBtn.onclick = function() { p.style.display='none'; };
+        p.appendChild(closeBtn);
     }
     var line = document.createElement('div');
     line.textContent = new Date().toTimeString().slice(0,8) + ' ' + msg;
@@ -566,6 +570,28 @@ function _dbg(msg) {
     p.scrollTop = p.scrollHeight;
 }
 window._dbg = _dbg;
+
+// אזור הקשה סמוי בפינה שמאלית-תחתונה (40×40px) — 5 לחיצות מהירות פותח/סוגר
+var _dbgHotspot = document.createElement('div');
+_dbgHotspot.style.cssText = 'position:fixed;bottom:0;left:0;width:40px;height:40px;z-index:100000;';
+_dbgHotspot.addEventListener('click', function() {
+    _dbgTapCount++;
+    clearTimeout(_dbgTapTimer);
+    _dbgTapTimer = setTimeout(function() { _dbgTapCount = 0; }, 1500);
+    if (_dbgTapCount >= 5) {
+        _dbgTapCount = 0;
+        var p = document.getElementById('_dbgPanel');
+        if (p) p.style.display = (p.style.display === 'none') ? 'block' : 'none';
+    }
+});
+document.body.appendChild(_dbgHotspot);
+
+window.onerror = function(msg, src, line) {
+    _dbg('❌ ' + msg + ' | ' + src + ':' + line);
+    // מציג את הפאנל אוטומטית כשיש שגיאה
+    var p = document.getElementById('_dbgPanel');
+    if (p) p.style.display = 'block';
+};
 // ===========================================
 </script>
 <script>
@@ -702,7 +728,8 @@ function setMarker(lat, lon) {
 function centerOnCoordinates(lat, lon) {
     var latNum = parseFloat(lat);
     var lonNum = parseFloat(lon);
-    map.flyTo({ center: [lonNum, latNum], zoom: 15 });
+    // שומר על הזום הנוכחי של המשתמש — לא מבצע zoom-in אוטומטי
+    map.panTo([lonNum, latNum]);
     setMarker(latNum, lonNum);
 }
 

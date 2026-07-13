@@ -77,9 +77,7 @@ fun MainScreen(
 ) {
     AppTheme(darkTheme = uiState.isDarkTheme) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-
-            // Column רגיל — Header, Input, MapCard, Result בסדר נכון
-            // MapCard קריאה אחת בלבד (slot קבוע) — הWebView לא זזה בין parents
+            // תמיד Column — fullscreen מנוהל ב-Kotlin ע"י FrameLayout native מחוץ ל-Compose
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -96,20 +94,15 @@ fun MainScreen(
                         onConvert = callbacks.onConvert,
                     )
                 }
-
+                // MapCard קריאה אחת — כשמורחב הWebView עזב ל-FrameLayout native, הBox ריק
                 MapCard(
-                    webView = webView,
-                    mapHeightPx = uiState.mapHeightPx,
-                    isExpanded = uiState.isMapExpanded,
+                    webView = if (!uiState.isMapExpanded) webView else null,
+                    mapHeightPx = uiState.mapHeightPx, isExpanded = uiState.isMapExpanded,
                     isGpsFollowActive = uiState.isGpsFollowActive,
-                    onExpandMap = callbacks.onExpandMap,
-                    onCollapseMap = callbacks.onCollapseMap,
-                    onHeightDrag = callbacks.onMapHeightDrag,
-                    onGpsCenter = callbacks.onGpsCenter,
-                    onGpsFollow = callbacks.onGpsFollow,
-                    onMapHeightMeasured = callbacks.onMapHeightMeasured,
+                    onExpandMap = callbacks.onExpandMap, onCollapseMap = callbacks.onCollapseMap,
+                    onHeightDrag = callbacks.onMapHeightDrag, onGpsCenter = callbacks.onGpsCenter,
+                    onGpsFollow = callbacks.onGpsFollow, onMapHeightMeasured = callbacks.onMapHeightMeasured,
                 )
-
                 if (!uiState.isMapExpanded) {
                     AnimatedVisibility(
                         visible = uiState.coordinates != null,
@@ -139,7 +132,7 @@ fun MainScreen(
 // ───────────────────────────────────────────────────────────────
 @Composable
 private fun MapCard(
-    webView: WebView,
+    webView: WebView?,
     mapHeightPx: Int,
     isExpanded: Boolean,
     isGpsFollowActive: Boolean,
@@ -168,11 +161,16 @@ private fun MapCard(
             modifier = if (isExpanded) Modifier.fillMaxSize()
                        else Modifier.fillMaxWidth().height(mapHeightDp)
         ) {
-            // AndroidView — slot יחיד וקבוע, factory רץ פעם אחת
-            AndroidView(
-                factory = { webView },
-                modifier = Modifier.fillMaxSize(),
-            )
+            // AndroidView — רק כשה-WebView זמין (לא מורחב ב-native FrameLayout)
+            if (webView != null) {
+                AndroidView(
+                    factory = { webView },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                // WebView נמצא ב-FrameLayout native — הBox ריק
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
+            }
 
             // כפתורי GPS — תמיד גלויים
             Column(
