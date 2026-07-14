@@ -1028,13 +1028,28 @@ function escapeHtml(text) {
 
 function makeMarkerElement(size, color, iconKey, text) {
     var svgPath = MARKER_ICON_SVGS[iconKey] || MARKER_ICON_SVGS.pin;
-    var label = text ? '<div class="pin-label">' + escapeHtml(text) + '</div>' : '';
     var wrapper = document.createElement('div');
     wrapper.className = 'custom-marker-icon';
+    // wrapper בגודל ה-SVG בדיוק — כך ה-anchor:'bottom' מצביע לתחתית ה-SVG (הנקודה),
+    // לא לתחתית ה-wrapper כולו (שהיה כולל גם את גובה התווית ומוסט שמאלה)
+    wrapper.style.width = size + 'px';
+    wrapper.style.height = size + 'px';
     wrapper.style.position = 'relative';
     wrapper.innerHTML =
         '<svg viewBox="0 0 24 24" width="' + size + '" height="' + size + '" fill="' + color +
-        '" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));">' + svgPath + '</svg>' + label;
+        '" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));display:block;">' + svgPath + '</svg>';
+    if (text) {
+        // תווית ב-absolute מתחת ל-SVG — לא משפיעה על גודל ה-wrapper ולא על ה-anchor
+        var label = document.createElement('div');
+        label.className = 'pin-label';
+        label.style.position = 'absolute';
+        label.style.top = '100%';
+        label.style.left = '50%';
+        label.style.transform = 'translateX(-50%)';
+        label.style.whiteSpace = 'nowrap';
+        label.textContent = text;
+        wrapper.appendChild(label);
+    }
     return wrapper;
 }
 
