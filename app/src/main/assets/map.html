@@ -413,9 +413,6 @@
         body.clean-capture-mode .maplibregl-control-container {
             visibility: hidden !important;
         }
-        body.clean-capture-mode .maplibregl-marker {
-            visibility: visible !important;
-        }
 /* [END: MapCSS] */
     </style>
 </head>
@@ -486,7 +483,7 @@
         <div class="toolbar-tooltip">החלף סגנון מפה (רחובות/לוויין)</div>
         <div class="options-popup" id="mapStylePopup">
             <div class="popup-title">סגנון מפה</div>
-            <div class="popup-actions" style="flex-direction:column; gap:6px;">
+            <div class="popup-actions" style="flex-direction:column;gap:6px;">
                 <button class="btn-done" id="btnStyleStreet" style="background:#3498db;">🗺 רחובות</button>
                 <button class="btn-done" id="btnStyleSatellite" style="background:#7f8c8d;">🛰 לוויין</button>
                 <button class="btn-done" id="btnStyleHiking" style="background:#27ae60;">🥾 שטח (הליכה)</button>
@@ -500,15 +497,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3,16 L12,20 L21,16 L12,12 Z"/><path d="M3,16 L3,9 L12,5 L21,9 L21,16" stroke-dasharray="2,2"/></svg>
         </button>
         <div class="toolbar-tooltip">הטיית מפה ל-3D (פרספקטיבה)</div>
-    </div>
-
-    <div class="toolbar-divider"></div>
-
-    <div class="toolbar-item">
-        <button class="toolbar-btn" id="btnMeasure">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21,6L3,6v2h1v2h2V8h2v4h2V8h2v2h2V8h2v4h2V8h1V6zM3,16h18v2H3z"/></svg>
-        </button>
-        <div class="toolbar-tooltip">מדידת מרחק בין נקודות</div>
     </div>
 
 </div>
@@ -551,36 +539,6 @@
 <script src="maplibre-gl.js"></script>
 <script>
 // [START: MapLogic]
-// ===== DEBUG PANEL (נסתר — 5 לחיצות פינה שמאלית-תחתונה לפתיחה) =====
-var _dbgTapCount = 0, _dbgTapTimer = null;
-function _dbg(msg) {
-    var p = document.getElementById('_dbgPanel');
-    if (!p) {
-        p = document.createElement('div');
-        p.id = '_dbgPanel';
-        p.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.85);color:#0f0;font-size:11px;font-family:monospace;padding:4px 8px;z-index:99999;max-height:120px;overflow-y:auto;direction:ltr;display:none;';
-        var cb = document.createElement('div');
-        cb.style.cssText = 'position:absolute;top:4px;right:8px;color:#f00;cursor:pointer;font-size:14px;';
-        cb.textContent = '✕'; cb.onclick = function() { p.style.display='none'; };
-        p.appendChild(cb); document.body.appendChild(p);
-    }
-    var line = document.createElement('div');
-    line.textContent = new Date().toTimeString().slice(0,8) + ' ' + msg;
-    p.appendChild(line); p.scrollTop = p.scrollHeight;
-}
-window._dbg = _dbg;
-var _dbgHotspot = document.createElement('div');
-_dbgHotspot.style.cssText = 'position:fixed;bottom:0;left:0;width:40px;height:40px;z-index:100000;';
-_dbgHotspot.addEventListener('click', function() {
-    _dbgTapCount++; clearTimeout(_dbgTapTimer);
-    _dbgTapTimer = setTimeout(function() { _dbgTapCount = 0; }, 1500);
-    if (_dbgTapCount >= 5) { _dbgTapCount = 0; var p = document.getElementById('_dbgPanel'); if (p) p.style.display = (p.style.display==='none')?'block':'none'; }
-});
-document.body.appendChild(_dbgHotspot);
-window.onerror = function(msg, src, line) { _dbg('❌ ' + msg + ':' + line); var p = document.getElementById('_dbgPanel'); if(p) p.style.display='block'; };
-// =====
-
-
 
 // ===== אתחול בסיסי של המפה =====
 var DEFAULT_LAT = 31.7683;
@@ -592,7 +550,7 @@ var DEFAULT_ZOOM = 8;
 // משתמשים בגרסה 0.2.3 (לא 0.3.0) - גרסת ה-0.3.0 ידועה כנכשלת בטעינה בחלק מהסביבות.
 maplibregl.setRTLTextPlugin(
     'mapbox-gl-rtl-text.js',
-    true - נטען רק כשבאמת נדרש טקסט RTL, לא תמיד
+    true // lazy load - נטען רק כשבאמת נדרש טקסט RTL, לא תמיד
 );
 
 // OpenFreeMap - מקור אריחים וקטוריים חינמי ולא מוגבל (ללא מפתח API), מבוסס OpenStreetMap.
@@ -612,18 +570,9 @@ map.addControl(new maplibregl.NavigationControl(), 'top-left');
 // סגנון המפה הנוכחי: 'street' | 'satellite' | 'hiking' | 'mtb'
 var currentMapStyle = 'street';
 
-// IHM tile URLs - מפת ישראל הסלולרית (Israel Hiking Map), מבוסס OSM
 var IHM_HIKING_URL = 'https://israelhiking.osm.org.il/Hebrew/Tiles/{z}/{x}/{y}.png';
 var IHM_MTB_URL    = 'https://israelhiking.osm.org.il/Hebrew/mtbTiles/{z}/{x}/{y}.png';
 
-/**
- * מחליף סגנון מפה. מצבים אפשריים:
- *   'street'    — OpenFreeMap liberty (וקטורי, ברירת מחדל)
- *   'satellite' — Esri World Imagery (ראסטר)
- *   'hiking'    — Israel Hiking Map (ראסטר, שבילים מסומנים)
- *   'mtb'       — Israel MTB Map (ראסטר, מסלולי אופניים)
- * אחרי כל החלפה, reinitializeAfterStyleChange משחזר את שכבות ה-GeoJSON (ציורים).
- */
 function switchMapStyle(style) {
     closeAllPopups();
     if (style === currentMapStyle) return;
@@ -635,35 +584,27 @@ function switchMapStyle(style) {
         return;
     }
 
-    // כל שאר המצבים — raster source מלא
     var tiles, attribution, layerId;
     if (style === 'satellite') {
-        tiles       = ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'];
-        attribution = 'Tiles &copy; Esri';
-        layerId     = 'satellite-layer';
+        tiles = ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'];
+        attribution = 'Tiles &copy; Esri'; layerId = 'satellite-layer';
     } else if (style === 'hiking') {
-        tiles       = [IHM_HIKING_URL];
-        attribution = '&copy; <a href="https://israelhiking.osm.org.il">Israel Hiking Map</a> contributors';
-        layerId     = 'ihm-hiking-layer';
+        tiles = [IHM_HIKING_URL];
+        attribution = '&copy; <a href="https://israelhiking.osm.org.il">Israel Hiking Map</a>';
+        layerId = 'ihm-hiking-layer';
     } else if (style === 'mtb') {
-        tiles       = [IHM_MTB_URL];
-        attribution = '&copy; <a href="https://israelhiking.osm.org.il">Israel MTB Map</a> contributors';
-        layerId     = 'ihm-mtb-layer';
-    } else {
-        return;
-    }
+        tiles = [IHM_MTB_URL];
+        attribution = '&copy; <a href="https://israelhiking.osm.org.il">Israel MTB Map</a>';
+        layerId = 'ihm-mtb-layer';
+    } else { return; }
 
     map.setStyle({
         version: 8,
-        sources: {
-            'raster-base': {
-                type: 'raster',
-                tiles: tiles,
-                tileSize: 256,
-                attribution: attribution,
-                maxzoom: (style === 'satellite') ? 19 : 16
-            }
-        },
+        sources: { 'raster-base': {
+            type: 'raster', tiles: tiles, tileSize: 256,
+            attribution: attribution,
+            maxzoom: (style === 'satellite') ? 19 : 16
+        }},
         layers: [{ id: layerId, type: 'raster', source: 'raster-base' }]
     });
     waitForStyleLoadedThen(reinitializeAfterStyleChange);
@@ -802,7 +743,6 @@ function setUiMode(mode) {
     currentDrawTool = null;
     cancelInProgressDrawing();
     clearVertexHandles();
-    if (isMeasureMode) stopMeasureMode();
 
     document.querySelectorAll('.toolbar-btn[data-mode]').forEach(function(btn) {
         btn.classList.toggle('active', btn.dataset.mode === mode);
@@ -845,7 +785,6 @@ document.querySelectorAll('#drawToolPopup [data-tool]').forEach(function(btn) {
 
 // הקשה על המפה - מתפרשת אך ורק לפי המצב הנוכחי
 map.on('click', function(e) {
-    if (isMeasureMode) { handleMeasureClick(e.lngLat); return; }
     if (currentMode === 'select') {
         var lat = e.lngLat.lat.toFixed(6);
         var lon = e.lngLat.lng.toFixed(6);
@@ -898,7 +837,7 @@ var DEFAULT_TEXT_LABEL_COLOR = '#262320';
 var DEFAULT_TEXT_LABEL_SIZE = 16;
 
 var MARKER_ICON_SVGS = {
-    // tip הפין ב-(12,12) מרכז ה-viewBox. anchor:'center' ללא offset = דיוק מושלם כמו circle.
+    // tip הפין ב-(12,12) = מרכז viewBox. anchor:'center' = דיוק כמו circle.
     pin: '<path d="M12,12 Q5,8 5,4 A7,7 0 0,1 19,4 Q19,8 12,12z"/><circle cx="12" cy="4" r="2.5" fill="white" opacity="0.6"/>',
     star: '<path d="M12,17.27L18.18,21l-1.64,-7.03L22,9.24l-7.19,-0.61L12,2 9.19,8.63 2,9.24l5.46,4.73L5.82,21z"/>',
     flag: '<path d="M14.4,6L14,4H5v17h2v-7h5.6l0.4,2h7V6z"/>',
@@ -916,7 +855,9 @@ function makeMarkerElement(size, color, iconKey, text) {
     var svgPath = MARKER_ICON_SVGS[iconKey] || MARKER_ICON_SVGS.pin;
     var wrapper = document.createElement('div');
     wrapper.className = 'custom-marker-icon';
-    wrapper.style.cssText = 'position:relative;width:' + size + 'px;height:' + size + 'px;';
+    wrapper.style.position = 'relative';
+    wrapper.style.width = size + 'px';
+    wrapper.style.height = size + 'px';
     wrapper.innerHTML = '<svg viewBox="0 0 24 24" width="' + size + '" height="' + size + '" fill="' + color +
         '" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));display:block;">' + svgPath + '</svg>';
     if (text) {
@@ -1537,9 +1478,6 @@ function showElementDetailsPopup(id) {
     document.getElementById('elementNameInput').value = entry.name || '';
     document.getElementById('elementShowNameCheckbox').checked = !!entry.showName;
     document.getElementById('elementShowCoordsCheckbox').checked = !!entry.showCoords;
-    document.getElementById('elementShowMetricsCheckbox').checked = !!entry.showMetrics;
-    document.getElementById('elementShowMetricsLabel').textContent =
-        (entry.kind === 'polyline') ? 'הצג אורך קו' : 'הצג שטח והיקף';
     popup.dataset.shapeId = id;
 
     popup.classList.add('visible');
@@ -1555,7 +1493,6 @@ function buildElementDetailsPopupElement() {
         '<input type="text" id="elementNameInput" placeholder="שם האלמנט (אופציונלי)" />' +
         '<div class="checkbox-row"><input type="checkbox" id="elementShowNameCheckbox"/><label for="elementShowNameCheckbox">הצג שם על המפה</label></div>' +
         '<div class="checkbox-row"><input type="checkbox" id="elementShowCoordsCheckbox"/><label for="elementShowCoordsCheckbox">הצג קואורדינטות מרכז על המפה</label></div>' +
-        '<div class="checkbox-row"><input type="checkbox" id="elementShowMetricsCheckbox"/><label for="elementShowMetricsCheckbox" id="elementShowMetricsLabel">הצג שטח והיקף</label></div>' +
         '<div class="popup-actions"><button class="btn-done" id="elementDetailsDoneBtn">סגור</button></div>';
     document.body.appendChild(popup);
 
@@ -1566,7 +1503,6 @@ function buildElementDetailsPopupElement() {
             entry.name = document.getElementById('elementNameInput').value.trim();
             entry.showName = document.getElementById('elementShowNameCheckbox').checked;
             entry.showCoords = document.getElementById('elementShowCoordsCheckbox').checked;
-            entry.showMetrics = document.getElementById('elementShowMetricsCheckbox').checked;
             updateElementLabelOverlay(id);
             persistShapes();
         }
@@ -1828,7 +1764,7 @@ function applyEditChanges() {
 
 function replaceMarkerElement(entry, newEl, id) {
     var lonLat = entry.marker.getLngLat();
-    var anchorPoint = (entry.kind === 'marker') ? 'bottom' : 'center';
+    var anchorPoint = 'center';
     entry.marker.remove();
     entry.marker = new maplibregl.Marker({ element: newEl, anchor: anchorPoint, draggable: true }).setLngLat(lonLat).addTo(map);
     setupMarkerDragBehavior(entry.marker, id);
@@ -2189,63 +2125,9 @@ function setCleanCaptureMode(enabled) {
 }
 
 map.on('load', function() {
-    _dbg('✅ map loaded | style: ' + currentMapStyle);
     setupShapesSourceAndLayers();
     setUiMode('select');
 });
-
-map.on('error', function(e) {
-    _dbg('❌ ' + (e.error ? e.error.message : JSON.stringify(e)));
-});
-
-// ===== כלי מדידה =====
-var isMeasureMode = false;
-var measurePoints = [], measureMarkers = [];
-var measureSourceId = 'measure-line';
-
-function startMeasureMode() {
-    isMeasureMode = true; measurePoints = [];
-    measureMarkers.forEach(function(m){m.remove();}); measureMarkers = [];
-    clearMeasureLayer();
-    document.getElementById('btnMeasure').classList.add('active');
-    document.getElementById('mapHintText').textContent = 'הקש על המפה להוספת נקודת מדידה';
-    document.getElementById('measureReadout').classList.add('visible');
-    document.getElementById('measureReadout').textContent = 'מדידה: הקש על המפה...';
-}
-function stopMeasureMode() {
-    isMeasureMode = false; measurePoints = [];
-    measureMarkers.forEach(function(m){m.remove();}); measureMarkers = [];
-    clearMeasureLayer();
-    document.getElementById('btnMeasure').classList.remove('active');
-    document.getElementById('measureReadout').classList.remove('visible');
-    document.getElementById('mapHintText').textContent = 'הקש על המפה לבחירת מיקום';
-}
-function clearMeasureLayer() {
-    if (map.getLayer(measureSourceId)) map.removeLayer(measureSourceId);
-    if (map.getSource(measureSourceId)) map.removeSource(measureSourceId);
-}
-function updateMeasureLayer() {
-    clearMeasureLayer();
-    if (measurePoints.length < 2) return;
-    map.addSource(measureSourceId, { type:'geojson', data:{type:'Feature',geometry:{type:'LineString',coordinates:measurePoints}} });
-    map.addLayer({ id:measureSourceId, type:'line', source:measureSourceId, paint:{'line-color':'#e74c3c','line-width':2,'line-dasharray':[2,1]} });
-}
-function handleMeasureClick(lngLat) {
-    var pt = [lngLat.lng, lngLat.lat];
-    measurePoints.push(pt);
-    var el = document.createElement('div');
-    el.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#e74c3c;color:#fff;font-size:11px;font-weight:bold;display:flex;align-items:center;justify-content:center;border:2px solid #fff;';
-    el.textContent = measurePoints.length;
-    measureMarkers.push(new maplibregl.Marker({element:el,anchor:'center'}).setLngLat(pt).addTo(map));
-    updateMeasureLayer();
-    var total = 0;
-    for (var i=1;i<measurePoints.length;i++) total+=haversineDistance(measurePoints[i-1][1],measurePoints[i-1][0],measurePoints[i][1],measurePoints[i][0]);
-    document.getElementById('measureReadout').textContent = 'מרחק: ' + formatDistance(total) + ' (' + measurePoints.length + ' נקודות)';
-}
-document.getElementById('btnMeasure').addEventListener('click', function() {
-    if (isMeasureMode) stopMeasureMode(); else { setUiMode('select'); startMeasureMode(); }
-});
-
 // [END: MapLogic]
 
 </script>
