@@ -572,7 +572,11 @@ class MainActivity : AppCompatActivity() {
                     cachedSnapshotUri = uri
                     launchWhatsappIntent(coords, uri)
                 }
-            }, 150) // delay מספיק ל-WebView לרנדר ללא ה-UI overlays
+                // safeguard: גם אם captureMapSnapshot נכשל, מכבים clean mode אחרי 2 שניות
+                webView?.postDelayed({
+                    webView?.evaluateJavascript("setCleanCaptureMode(false)", null)
+                }, 2000)
+            }, 150)
         }
     }
 

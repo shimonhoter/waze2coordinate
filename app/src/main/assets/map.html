@@ -413,6 +413,10 @@
         body.clean-capture-mode .maplibregl-control-container {
             visibility: hidden !important;
         }
+        /* markers ותוויות חייבים להישאר גלויים גם ב-clean-capture-mode */
+        body.clean-capture-mode .maplibregl-marker {
+            visibility: visible !important;
+        }
 /* [END: MapCSS] */
     </style>
 </head>
@@ -2290,6 +2294,7 @@ function setEmbeddedChromeVisible(showFullChrome) {
 }
 
 function setCleanCaptureMode(enabled) {
+    _dbg('📸 clean-capture-mode: ' + enabled);
     document.body.classList.toggle('clean-capture-mode', enabled);
 }
 
