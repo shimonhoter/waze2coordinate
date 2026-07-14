@@ -1356,8 +1356,9 @@ function promptAndPlaceMarker(lonLat) {
     // anchor: 'bottom' - האייקונים (פין/דגל/וכו') מצוירים כך שהקודקוד התחתון של ה-SVG
     // הוא הנקודה שמייצגת את המיקום בפועל, לא מרכז תיבת ה-SVG. anchor שגוי (center) הוא
     // מה שגרם לפינים "להיראות זזים" יחסית למיקום שעליו הוקשו בפועל.
-    var pinOffset = [0, -Math.round(props.size / 12)];
-    var marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: pinOffset, draggable: true }).setLngLat(lonLat).addTo(map);
+    // anchor:center עם offset שמזיז את המרכז כלפי מטה עד ה-tip של הפין (y=22/24 מגובה ה-SVG)
+    var pinOffset = [0, Math.round(props.size * 22 / 24) - Math.round(props.size / 2)];
+    var marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: pinOffset, draggable: true }).setLngLat(lonLat).addTo(map);
     el.addEventListener('click', function(ev) {
         if (currentMode === 'edit') {
             ev.stopPropagation();
@@ -1953,9 +1954,10 @@ function applyEditChanges() {
 
 function replaceMarkerElement(entry, newEl, id) {
     var lonLat = entry.marker.getLngLat();
-    var anchorPoint = (entry.kind === 'marker') ? 'bottom' : 'center';
     entry.marker.remove();
-    entry.marker = new maplibregl.Marker({ element: newEl, anchor: anchorPoint, draggable: true }).setLngLat(lonLat).addTo(map);
+    var sz = entry.props.size || 26;
+    var mOffset = (entry.kind === 'marker') ? [0, Math.round(sz * 22 / 24) - Math.round(sz / 2)] : [0, 0];
+    entry.marker = new maplibregl.Marker({ element: newEl, anchor: 'center', offset: mOffset, draggable: true }).setLngLat(lonLat).addTo(map);
     setupMarkerDragBehavior(entry.marker, id);
 }
 
@@ -2023,8 +2025,9 @@ function loadShapesFromJson(jsonStr) {
                 el.addEventListener('click', function(ev) {
                     if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(id, ev); }
                 });
-                var pOff = [0, -Math.round((props.size || 26) / 12)];
-                var marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: pOff, draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
+                var sz = props.size || 26;
+                var pOff = [0, Math.round(sz * 22 / 24) - Math.round(sz / 2)];
+                var marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: pOff, draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
                 shapeRegistry[id] = { kind: 'marker', marker: marker, props: props, lonLat: [entry.lon, entry.lat], name: entry.name, showName: entry.showName, showCoords: entry.showCoords, showMetrics: entry.showMetrics, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
                 setupMarkerDragBehavior(marker, id);
                 updateElementLabelOverlay(id);
