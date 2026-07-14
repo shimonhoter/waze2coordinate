@@ -625,6 +625,8 @@ var map = new maplibregl.Map({
 
 map.on('load', function() {
     _dbg('✅ map loaded | style: ' + currentMapStyle);
+    var style = map.getStyle();
+    _dbg('glyphs: ' + (style.glyphs || 'none'));
     setupShapesSourceAndLayers();
     setUiMode('select');
 });
@@ -1013,9 +1015,8 @@ var DEFAULT_TEXT_LABEL_COLOR = '#262320';
 var DEFAULT_TEXT_LABEL_SIZE = 16;
 
 var MARKER_ICON_SVGS = {
-    // הפין מצויר כך שה-tip נמצא בדיוק ב-(12,12) מרכז ה-viewBox.
-    // כך anchor:'center' ללא offset שם את הנקודה החדה בדיוק על הקואורדינטה — בדיוק כמו circle.
-    pin: '<path d="M12,12 C12,12 6,5 6,2.5 A6,6 0 0,1 18,2.5 C18,5 12,12 12,12z M12,0.5 A2.5,2.5 0 1,0 12,5.5 A2.5,2.5 0 0,0 12,0.5z"/>',
+    // פין: tip ב-(12,12), גוף מעל ב-y=0..11. anchor:'center' = tip על הקואורדינטה (כמו circle).
+    pin: '<path d="M12,12 C9,9 5,7 5,3.5 A7,7 0 0,1 19,3.5 C19,7 15,9 12,12z"/><circle cx="12" cy="3.5" r="2.5" fill="white" opacity="0.6"/>',
     star: '<path d="M12,17.27L18.18,21l-1.64,-7.03L22,9.24l-7.19,-0.61L12,2 9.19,8.63 2,9.24l5.46,4.73L5.82,21z"/>',
     flag: '<path d="M14.4,6L14,4H5v17h2v-7h5.6l0.4,2h7V6z"/>',
     circle: '<circle cx="12" cy="12" r="8"/>',
