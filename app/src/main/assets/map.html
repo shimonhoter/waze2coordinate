@@ -627,12 +627,20 @@ map.on('load', function() {
     _dbg('✅ map loaded | style: ' + currentMapStyle);
     var style = map.getStyle();
     _dbg('glyphs: ' + (style.glyphs || 'none'));
+    // בדיקה אם fetch ל-glyphs עובד
+    fetch('https://tiles.openfreemap.org/fonts/Open Sans Regular,Arial Unicode MS Regular/0-255.pbf')
+        .then(function(r) { _dbg('✅ glyphs fetch OK: ' + r.status); })
+        .catch(function(e) { _dbg('❌ glyphs fetch FAIL: ' + e.message); });
     setupShapesSourceAndLayers();
     setUiMode('select');
 });
 
 map.on('error', function(e) {
     _dbg('❌ map error: ' + (e.error ? e.error.message : JSON.stringify(e)));
+});
+
+map.on('styleimagemissing', function(e) {
+    _dbg('🖼 missing image: ' + e.id);
 });
 
 map.addControl(new maplibregl.NavigationControl(), 'top-left');

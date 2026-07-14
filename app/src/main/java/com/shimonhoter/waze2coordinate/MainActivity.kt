@@ -214,6 +214,11 @@ class MainActivity : AppCompatActivity() {
         @Suppress("SetJavaScriptEnabled")
         wv.settings.allowFileAccessFromFileURLs = true
         wv.settings.allowUniversalAccessFromFileURLs = true
+        // מאפשר טעינת PBF fonts ו-tiles מ-HTTPS כש-page נטענת מ-file://
+        wv.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        // cache מלא — שומר tiles/glyphs לשימוש חוזר
+        wv.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+        wv.settings.databaseEnabled = true
         wv.addJavascriptInterface(MapJsBridge(), "AndroidBridge")
 
         wv.webChromeClient = object : android.webkit.WebChromeClient() {
