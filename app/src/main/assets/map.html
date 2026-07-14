@@ -627,10 +627,14 @@ map.on('load', function() {
     _dbg('✅ map loaded | style: ' + currentMapStyle);
     var style = map.getStyle();
     _dbg('glyphs: ' + (style.glyphs || 'none'));
-    // בדיקה אם fetch ל-glyphs עובד
-    fetch('https://tiles.openfreemap.org/fonts/Open Sans Regular,Arial Unicode MS Regular/0-255.pbf')
-        .then(function(r) { _dbg('✅ glyphs fetch OK: ' + r.status); })
-        .catch(function(e) { _dbg('❌ glyphs fetch FAIL: ' + e.message); });
+    // עקיפת glyphs URL — OpenFreeMap מחזיר 404 על הפונטים.
+    // fonts.openmaptiles.org הוא GitHub Pages עם glyphs תואמים.
+    if (style.glyphs && style.glyphs.indexOf('openfreemap') !== -1) {
+        style.glyphs = 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf';
+        map.setStyle(style);
+        _dbg('🔤 glyphs overridden to openmaptiles fonts');
+        return; // יוחזר ל-load שוב אחרי setStyle
+    }
     setupShapesSourceAndLayers();
     setUiMode('select');
 });
