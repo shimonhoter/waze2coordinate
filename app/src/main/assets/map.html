@@ -838,7 +838,7 @@ var DEFAULT_TEXT_LABEL_SIZE = 16;
 
 var MARKER_ICON_SVGS = {
     // tip הפין ב-(12,12) = מרכז viewBox. anchor:'center' = דיוק כמו circle.
-    pin: '<path d="M12,12 Q5,8 5,4 A7,7 0 0,1 19,4 Q19,8 12,12z"/><circle cx="12" cy="4" r="2.5" fill="white" opacity="0.6"/>',
+    pin: '<path d="M12,2C8.13,2 5,5.13 5,9c0,5.25 7,13 7,13s7,-7.75 7,-13C19,5.13 15.87,2 12,2zM12,11.5c-1.38,0-2.5,-1.12-2.5,-2.5s1.12,-2.5 2.5,-2.5 2.5,1.12 2.5,2.5S13.38,11.5 12,11.5z"/>',
     star: '<path d="M12,17.27L18.18,21l-1.64,-7.03L22,9.24l-7.19,-0.61L12,2 9.19,8.63 2,9.24l5.46,4.73L5.82,21z"/>',
     flag: '<path d="M14.4,6L14,4H5v17h2v-7h5.6l0.4,2h7V6z"/>',
     circle: '<circle cx="12" cy="12" r="8"/>',
@@ -1173,7 +1173,7 @@ function promptAndPlaceMarker(lonLat) {
     // anchor: 'bottom' - האייקונים (פין/דגל/וכו') מצוירים כך שהקודקוד התחתון של ה-SVG
     // הוא הנקודה שמייצגת את המיקום בפועל, לא מרכז תיבת ה-SVG. anchor שגוי (center) הוא
     // מה שגרם לפינים "להיראות זזים" יחסית למיקום שעליו הוקשו בפועל.
-    var marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true }).setLngLat(lonLat).addTo(map);
+    var marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, Math.round(props.size*(10/24))], draggable: true }).setLngLat(lonLat).addTo(map);
     el.addEventListener('click', function(ev) {
         if (currentMode === 'edit') {
             ev.stopPropagation();
@@ -1193,7 +1193,7 @@ function promptAndPlaceTextLabel(lonLat) {
     var id = 'shape-' + (nextShapeId++);
     var props = { kind: 'text', color: DEFAULT_TEXT_LABEL_COLOR, fontSize: DEFAULT_TEXT_LABEL_SIZE, text: text };
     var el = makeTextLabelElement(props.text, props.color, props.fontSize);
-    var marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true }).setLngLat(lonLat).addTo(map);
+    var marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, Math.round(props.size*(10/24))], draggable: true }).setLngLat(lonLat).addTo(map);
     el.addEventListener('click', function(ev) {
         if (currentMode === 'edit') {
             ev.stopPropagation();
@@ -1834,7 +1834,7 @@ function loadShapesFromJson(jsonStr) {
                 el.addEventListener('click', function(ev) {
                     if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(id, ev); }
                 });
-                var marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
+                var marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, Math.round((props.size||26)*(10/24))], draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
                 shapeRegistry[id] = { kind: 'marker', marker: marker, props: props, lonLat: [entry.lon, entry.lat], name: entry.name, showName: entry.showName, showCoords: entry.showCoords, showMetrics: entry.showMetrics, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
                 setupMarkerDragBehavior(marker, id);
                 updateElementLabelOverlay(id);
