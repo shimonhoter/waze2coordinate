@@ -342,8 +342,9 @@ class MainActivity : AppCompatActivity() {
         } catch (e: SecurityException) { }
     }
 
-    private fun sendGpsToMap(lat: Double, lon: Double, accuracy: Float? = null) {
-        webView?.evaluateJavascript("centerOnGps('$lat', '$lon', ${accuracy ?: "null"})", null)
+    private fun sendGpsToMap(lat: Double, lon: Double, accuracy: Float? = null, heading: Float? = null) {
+        val hdg = if (heading != null && heading >= 0f) heading else null
+        webView?.evaluateJavascript("centerOnGps('$lat', '$lon', ${accuracy ?: "null"}, ${hdg ?: "null"})", null)
     }
 
     private fun toggleGpsFollow() { if (isGpsFollowActive) stopGpsFollow() else {
@@ -358,7 +359,10 @@ class MainActivity : AppCompatActivity() {
         if (!lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
             Toast.makeText(this, getString(R.string.error_location_unavailable), Toast.LENGTH_SHORT).show(); return
         }
-        val listener = android.location.LocationListener { loc -> sendGpsToMap(loc.latitude, loc.longitude, loc.accuracy) }
+        val listener = android.location.LocationListener { loc ->
+            val hdg = if (loc.hasBearing()) loc.bearing else null
+            sendGpsToMap(loc.latitude, loc.longitude, loc.accuracy, hdg)
+        }
         gpsFollowListener = listener
         try {
             lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, listener, Looper.getMainLooper())

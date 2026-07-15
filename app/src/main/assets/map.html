@@ -669,19 +669,24 @@ function ensureGpsAccuracyLayer() {
     }
 }
 
-function centerOnGps(lat, lon, accuracy) {
+function centerOnGps(lat, lon, accuracy, heading) {
     var latNum = parseFloat(lat);
     var lonNum = parseFloat(lon);
-    map.flyTo({ center: [lonNum, latNum], zoom: map.getZoom() });
 
+    // סיבוב המפה בכיוון התנועה כשמעקב אוטומטי פעיל
+    var isFollowActive = document.body.classList.contains('gps-follow-active');
+    var hdg = (heading !== null && heading !== undefined && heading !== 'null') ? parseFloat(heading) : null;
+
+    if (isFollowActive && hdg !== null) {
+        map.easeTo({ center: [lonNum, latNum], bearing: hdg, zoom: map.getZoom(), duration: 800 });
+    } else {
+        map.flyTo({ center: [lonNum, latNum], zoom: map.getZoom() });
+    }
+
+    // עדכון מרקר GPS
     if (!gpsMarkerEl) {
         gpsMarkerEl = document.createElement('div');
-        gpsMarkerEl.style.width = '16px';
-        gpsMarkerEl.style.height = '16px';
-        gpsMarkerEl.style.borderRadius = '50%';
-        gpsMarkerEl.style.background = '#4285F4';
-        gpsMarkerEl.style.border = '3px solid white';
-        gpsMarkerEl.style.boxShadow = '0 0 4px rgba(0,0,0,0.5)';
+        gpsMarkerEl.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#4285F4;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.5);';
         gpsMarker = new maplibregl.Marker({ element: gpsMarkerEl }).setLngLat([lonNum, latNum]).addTo(map);
     } else {
         gpsMarker.setLngLat([lonNum, latNum]);
@@ -692,6 +697,11 @@ function centerOnGps(lat, lon, accuracy) {
         var accNum = parseFloat(accuracy);
         var circlePolygon = makeCirclePolygon(lonNum, latNum, accNum);
         map.getSource(gpsAccuracySourceId).setData(circlePolygon);
+    }
+
+    // עדכון ניגון מסלול
+    if (isRoutePlaybackActive) {
+        updateRoutePlayback(latNum, lonNum, hdg);
     }
 }
 
@@ -1407,6 +1417,9 @@ function openEditPopupForShape(id, point) {
 
     positionEditPopup(popup, point.x, point.y);
     fillEditPopupFields(entry);
+    // הצג כפתור ניגון רק לקווים
+    var playBtn = document.getElementById('editPlayRouteBtn');
+    if (playBtn) playBtn.style.display = (entry.kind === 'polyline') ? 'inline-block' : 'none';
     popup.classList.add('visible');
 }
 
@@ -1661,7 +1674,9 @@ function buildEditPopupElement() {
         '<div class="option-row"><label>צבע</label><input type="color" id="editColorPicker"/></div>' +
         '<div class="option-row" id="editOpacityRow"><label>שקיפות</label><input type="range" id="editOpacitySlider" min="10" max="100"/><span class="val" id="editOpacityVal"></span></div>' +
         '<div class="option-row"><label id="editWeightLabel">עובי</label><input type="range" id="editWeightSlider" min="1" max="48"/><span class="val" id="editWeightVal"></span></div>' +
-        '<div class="popup-actions"><button class="btn-delete" id="editDeleteBtn">מחק</button><button class="btn-done" id="editCloseBtn">סגור</button></div>';
+        '<div class="popup-actions"><button class="btn-delete" id="editDeleteBtn">מחק</button>' +
+        '<button class="btn-done" id="editPlayRouteBtn" style="display:none;background:#27ae60;">▶ נגן מסלול</button>' +
+        '<button class="btn-done" id="editCloseBtn">סגור</button></div>';
     document.body.appendChild(popup);
 
     document.getElementById('editColorPicker').addEventListener('input', applyEditChanges);
@@ -1688,6 +1703,12 @@ function buildEditPopupElement() {
         popup.classList.remove('visible');
         activeEditShapeId = null;
         clearVertexHandles();
+    });
+    document.getElementById('editPlayRouteBtn').addEventListener('click', function() {
+        if (activeEditShapeId) {
+            popup.classList.remove('visible');
+            startPlaybackForShape(activeEditShapeId);
+        }
     });
 
     return popup;
@@ -2105,6 +2126,11 @@ function setGpsFollowUiState(active) {
     var btn = document.getElementById('btnGpsFollow');
     btn.classList.toggle('gps-follow-on', active);
     btn.classList.toggle('gps-follow-off', !active);
+    document.body.classList.toggle('gps-follow-active', active);
+    // בכיבוי מעקב — החזר את המפה לכיוון צפון
+    if (!active) {
+        map.easeTo({ bearing: 0, duration: 500 });
+    }
 }
 
 // ===== מצב מוטמע/מורחב =====
@@ -2131,6 +2157,143 @@ map.on('load', function() {
     setupShapesSourceAndLayers();
     setUiMode('select');
 });
+// ===== ניגון מסלול (Route Playback) =====
+var isRoutePlaybackActive = false;
+var playbackRouteCoords = [];    // [[lng,lat], ...]
+var playbackNextWpIdx = 0;       // אינדקס waypoint הבא
+var WAYPOINT_REACH_DIST = 30;    // מטר — מרחק "הגעה" לנקודה
+var TURN_WARN_DIST = 80;         // מטר — מרחק להתראת פנייה מראש
+var lastAnnouncedIdx = -1;
+
+// כיוון (bearing) בין שתי נקודות [lng,lat]
+function bearingBetween(a, b) {
+    var lat1 = a[1] * Math.PI / 180, lat2 = b[1] * Math.PI / 180;
+    var dLng = (b[0] - a[0]) * Math.PI / 180;
+    var y = Math.sin(dLng) * Math.cos(lat2);
+    var x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+// זווית פנייה (-180..180, חיובי=ימין)
+function turnAngle(bearingA, bearingB) {
+    var diff = ((bearingB - bearingA) + 540) % 360 - 180;
+    return diff;
+}
+
+// TTS בעברית
+function speakHebrew(text) {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    var utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'he-IL';
+    utt.rate = 0.95;
+    window.speechSynthesis.speak(utt);
+}
+
+// תיאור פנייה לפי זווית
+function turnDescription(angle) {
+    var abs = Math.abs(angle);
+    if (abs < 15) return null;                          // ישר — אין התראה
+    if (abs < 45) return angle > 0 ? 'עקום ימינה' : 'עקום שמאלה';
+    if (abs < 120) return angle > 0 ? 'פנה ימינה' : 'פנה שמאלה';
+    return angle > 0 ? 'פנה חדה ימינה' : 'פנה חדה שמאלה';
+}
+
+// פלייבק layer על המפה
+var PLAYBACK_SOURCE = 'playback-route';
+function showPlaybackRoute(coords) {
+    if (map.getLayer(PLAYBACK_SOURCE + '-line')) map.removeLayer(PLAYBACK_SOURCE + '-line');
+    if (map.getLayer(PLAYBACK_SOURCE + '-done')) map.removeLayer(PLAYBACK_SOURCE + '-done');
+    if (map.getSource(PLAYBACK_SOURCE)) map.removeSource(PLAYBACK_SOURCE);
+    map.addSource(PLAYBACK_SOURCE, { type: 'geojson', data: {
+        type: 'Feature', geometry: { type: 'LineString', coordinates: coords }
+    }});
+    map.addLayer({ id: PLAYBACK_SOURCE + '-line', type: 'line', source: PLAYBACK_SOURCE,
+        paint: { 'line-color': '#3498db', 'line-width': 5, 'line-opacity': 0.8 }
+    });
+}
+function removePlaybackRoute() {
+    if (map.getLayer(PLAYBACK_SOURCE + '-line')) map.removeLayer(PLAYBACK_SOURCE + '-line');
+    if (map.getSource(PLAYBACK_SOURCE)) map.removeSource(PLAYBACK_SOURCE);
+}
+
+// התחלת ניגון מסלול — coords הוא [[lng,lat],...]
+function startRoutePlayback(coords) {
+    if (coords.length < 2) { alert('המסלול קצר מדי'); return; }
+    playbackRouteCoords = coords;
+    playbackNextWpIdx = 1;
+    lastAnnouncedIdx = -1;
+    isRoutePlaybackActive = true;
+    showPlaybackRoute(coords);
+    speakHebrew('מתחיל ניווט. בצע את המסלול.');
+    // הפעל GPS follow אוטומטית
+    if (window.AndroidBridge && window.AndroidBridge.onToggleGpsFollow) {
+        if (!document.body.classList.contains('gps-follow-active'))
+            window.AndroidBridge.onToggleGpsFollow();
+    }
+    document.getElementById('mapHintText').textContent = '🧭 ניגון מסלול פעיל';
+}
+
+function stopRoutePlayback() {
+    isRoutePlaybackActive = false;
+    removePlaybackRoute();
+    speakHebrew('סיום ניווט.');
+    document.getElementById('mapHintText').textContent = 'הקש על המפה לבחירת מיקום';
+}
+
+// נקרא בכל עדכון GPS כשניגון פעיל
+function updateRoutePlayback(lat, lng, heading) {
+    if (!isRoutePlaybackActive || playbackNextWpIdx >= playbackRouteCoords.length) {
+        if (playbackNextWpIdx >= playbackRouteCoords.length) {
+            stopRoutePlayback();
+            speakHebrew('הגעת ליעד!');
+        }
+        return;
+    }
+
+    var pos = [lng, lat];
+
+    // בדוק הגעה לwaypoint הנוכחי
+    var wp = playbackRouteCoords[playbackNextWpIdx];
+    var distToWp = haversineDistance(lat, lng, wp[1], wp[0]);
+    if (distToWp < WAYPOINT_REACH_DIST) {
+        playbackNextWpIdx++;
+        lastAnnouncedIdx = -1; // אפשר התראה חדשה
+        return;
+    }
+
+    // בדוק אם מתקרבים לwaypoint הבא — תן התראה מראש
+    if (playbackNextWpIdx < playbackRouteCoords.length - 1 &&
+        lastAnnouncedIdx !== playbackNextWpIdx) {
+        if (distToWp < TURN_WARN_DIST) {
+            // חשב פנייה בין כיוון הקטע הנוכחי לקטע הבא
+            var prev = playbackRouteCoords[playbackNextWpIdx - 1];
+            var curr = playbackRouteCoords[playbackNextWpIdx];
+            var next = playbackRouteCoords[playbackNextWpIdx + 1];
+            if (prev && curr && next) {
+                var b1 = bearingBetween(prev, curr);
+                var b2 = bearingBetween(curr, next);
+                var angle = turnAngle(b1, b2);
+                var desc = turnDescription(angle);
+                if (desc) {
+                    speakHebrew('בעוד ' + Math.round(distToWp) + ' מטר, ' + desc);
+                    lastAnnouncedIdx = playbackNextWpIdx;
+                }
+            }
+        }
+    }
+}
+
+// API ל-Kotlin: הפעלת ניגון על מסלול לפי ID של shape קיים
+function startPlaybackForShape(shapeId) {
+    var entry = shapeRegistry[shapeId];
+    if (!entry || (entry.kind !== 'line' && entry.kind !== 'polyline')) {
+        alert('בחר קו/מסלול לניגון'); return;
+    }
+    var coords = entry.feature.geometry.coordinates;
+    startRoutePlayback(coords);
+}
+
 // [END: MapLogic]
 
 </script>
