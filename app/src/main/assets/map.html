@@ -1173,7 +1173,7 @@ function promptAndPlaceMarker(lonLat) {
     // anchor: 'bottom' - האייקונים (פין/דגל/וכו') מצוירים כך שהקודקוד התחתון של ה-SVG
     // הוא הנקודה שמייצגת את המיקום בפועל, לא מרכז תיבת ה-SVG. anchor שגוי (center) הוא
     // מה שגרם לפינים "להיראות זזים" יחסית למיקום שעליו הוקשו בפועל.
-    var marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, Math.round(props.size*(10/24))], draggable: true }).setLngLat(lonLat).addTo(map);
+    var marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, -Math.round(props.size*(10/24))], draggable: true }).setLngLat(lonLat).addTo(map);
     el.addEventListener('click', function(ev) {
         if (currentMode === 'edit') {
             ev.stopPropagation();
@@ -1193,7 +1193,7 @@ function promptAndPlaceTextLabel(lonLat) {
     var id = 'shape-' + (nextShapeId++);
     var props = { kind: 'text', color: DEFAULT_TEXT_LABEL_COLOR, fontSize: DEFAULT_TEXT_LABEL_SIZE, text: text };
     var el = makeTextLabelElement(props.text, props.color, props.fontSize);
-    var marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, Math.round(props.size*(10/24))], draggable: true }).setLngLat(lonLat).addTo(map);
+    var marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, -Math.round(props.size*(10/24))], draggable: true }).setLngLat(lonLat).addTo(map);
     el.addEventListener('click', function(ev) {
         if (currentMode === 'edit') {
             ev.stopPropagation();
@@ -1834,7 +1834,7 @@ function loadShapesFromJson(jsonStr) {
                 el.addEventListener('click', function(ev) {
                     if (currentMode === 'edit') { ev.stopPropagation(); openEditPopupForMarker(id, ev); }
                 });
-                var marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, Math.round((props.size||26)*(10/24))], draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
+                var marker = new maplibregl.Marker({ element: el, anchor: 'center', offset: [0, -Math.round((props.size||26)*(10/24))], draggable: true }).setLngLat([entry.lon, entry.lat]).addTo(map);
                 shapeRegistry[id] = { kind: 'marker', marker: marker, props: props, lonLat: [entry.lon, entry.lat], name: entry.name, showName: entry.showName, showCoords: entry.showCoords, showMetrics: entry.showMetrics, labelLngLat: (entry.labelLon !== null && entry.labelLon !== undefined) ? [entry.labelLon, entry.labelLat] : null };
                 setupMarkerDragBehavior(marker, id);
                 updateElementLabelOverlay(id);
