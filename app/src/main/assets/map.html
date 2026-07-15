@@ -672,7 +672,7 @@ function ensureGpsAccuracyLayer() {
 function centerOnGps(lat, lon, accuracy) {
     var latNum = parseFloat(lat);
     var lonNum = parseFloat(lon);
-    map.flyTo({ center: [lonNum, latNum], zoom: 17 });
+    map.flyTo({ center: [lonNum, latNum], zoom: map.getZoom() });
 
     if (!gpsMarkerEl) {
         gpsMarkerEl = document.createElement('div');
