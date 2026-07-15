@@ -1169,11 +1169,14 @@ function promptAndPlaceMarker(lonLat) {
     var text = window.prompt('טקסט לתווית (ניתן להשאיר ריק):', '') || '';
     var id = 'shape-' + (nextShapeId++);
     var props = { kind: 'marker', color: DEFAULT_MARKER_COLOR, size: DEFAULT_MARKER_SIZE, iconKey: DEFAULT_MARKER_ICON_KEY, text: text };
-    var el = makeMarkerElement(props.size, props.color, props.iconKey, props.text);
-    // anchor: 'bottom' - האייקונים (פין/דגל/וכו') מצוירים כך שהקודקוד התחתון של ה-SVG
-    // הוא הנקודה שמייצגת את המיקום בפועל, לא מרכז תיבת ה-SVG. anchor שגוי (center) הוא
-    // מה שגרם לפינים "להיראות זזים" יחסית למיקום שעליו הוקשו בפועל.
-    var marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true }).setLngLat(lonLat).addTo(map);
+    var marker;
+    if (props.iconKey === 'pin' || !props.iconKey) {
+        // Default MapLibre marker — tip מדויק כמו selectMarker, ללא element מותאם
+        marker = new maplibregl.Marker({ color: props.color || '#e74c3c', draggable: true }).setLngLat(lonLat).addTo(map);
+    } else {
+        var el = makeMarkerElement(props.size, props.color, props.iconKey, props.text);
+        marker = new maplibregl.Marker({ element: el, anchor: 'center', draggable: true }).setLngLat(lonLat).addTo(map);
+    }
     el.addEventListener('click', function(ev) {
         if (currentMode === 'edit') {
             ev.stopPropagation();
