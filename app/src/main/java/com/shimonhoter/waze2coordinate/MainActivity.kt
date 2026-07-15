@@ -23,6 +23,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.shimonhoter.waze2coordinate.ui.MainCallbacks
+import com.shimonhoter.waze2coordinate.ui.AppTab
 import com.shimonhoter.waze2coordinate.ui.MainScreen
 import com.shimonhoter.waze2coordinate.ui.MainUiState
 import kotlinx.coroutines.Dispatchers
@@ -134,6 +135,9 @@ class MainActivity : AppCompatActivity() {
                             uiState = uiState.copy(mapHeightPx = measuredPx)
                             _dbg("📐 map height: ${measuredPx}px")
                         }
+                    },
+                    onTabChange = { tab ->
+                        uiState = uiState.copy(activeTab = tab)
                     },
                 ),
             )
